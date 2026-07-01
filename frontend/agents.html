@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monitor Tool — Agents</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    .agent-status-dot { width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:6px; }
+    .agent-status-dot.online  { background:var(--up);      box-shadow:0 0 6px var(--up); }
+    .agent-status-dot.delayed { background:#f39c12;         box-shadow:0 0 6px #f39c12; }
+    .agent-status-dot.offline { background:var(--down);    box-shadow:0 0 6px var(--down); }
+    .agent-status-dot.never   { background:var(--unknown); }
+
+    .api-key-box {
+      background:#1e293b;
+      color:#7dd3fc;
+      font-family:monospace;
+      font-size:13px;
+      padding:12px 14px;
+      border-radius:6px;
+      word-break:break-all;
+      margin:12px 0 4px;
+      position:relative;
+    }
+    .setup-steps { font-size:13px; color:var(--text-secondary); line-height:1.8; }
+    .setup-steps code {
+      background:#f0f3f7;
+      padding:1px 5px;
+      border-radius:3px;
+      color:var(--text-primary);
+      font-size:12px;
+    }
+    .step-num {
+      display:inline-flex; align-items:center; justify-content:center;
+      width:20px; height:20px; border-radius:50%;
+      background:var(--primary); color:#fff;
+      font-size:11px; font-weight:700; margin-right:8px; flex-shrink:0;
+    }
+    .step { display:flex; align-items:flex-start; margin-bottom:10px; }
+    .warning-box {
+      background:#fff7ed; border:1px solid #fed7aa; border-radius:6px;
+      padding:10px 14px; font-size:13px; color:#92400e; margin-bottom:16px;
+      display:flex; align-items:center; gap:8px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <h1><i class="fa-solid fa-chart-network" style="margin-right:8px;color:#2980b9"></i>Monitor Tool</h1>
+    <span>Network &amp; Server Monitor</span>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-label">Main</div>
+    <a href="index.html" class="nav-link">
+      <i class="fa-solid fa-gauge"></i> Dashboard
+    </a>
+    <a href="devices.html" class="nav-link">
+      <i class="fa-solid fa-server"></i> Devices
+    </a>
+    <a href="agents.html" class="nav-link active">
+      <i class="fa-solid fa-satellite-dish"></i> Agents
+    </a>
+  </nav>
+</aside>
+
+<!-- Main -->
+<div class="main">
+  <header class="topbar">
+    <h2>Agents</h2>
+    <div class="topbar-right">
+      <button class="btn btn-primary" onclick="openAddDialog()">
+        <i class="fa-solid fa-plus"></i> New Agent
+      </button>
+    </div>
+  </header>
+
+  <div class="content">
+
+    <!-- Info banner -->
+    <div class="warning-box" style="background:#eff6ff;border-color:#bfdbfe;color:#1e40af;margin-bottom:20px">
+      <i class="fa-solid fa-circle-info"></i>
+      <span>An agent is a small Node.js process you install on any machine <strong>inside</strong> a private network. It pings devices locally and pushes results to this server. The server must be reachable from the agent's network (via internet, VPN, or port forwarding).</span>
+    </div>
+
+    <div class="section-card">
+      <div class="section-header">
+        <h3><i class="fa-solid fa-satellite-dish" style="margin-right:8px;color:#2980b9"></i>Registered Agents</h3>
+        <span class="topbar-meta" id="agent-count"></span>
+      </div>
+      <div id="table-wrap">
+        <div class="empty-state"><div class="spinner"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Agent Dialog -->
+<dialog id="agent-dialog">
+  <div class="dialog-header">
+    <h3>Register New Agent</h3>
+    <button class="btn-icon" onclick="document.getElementById('agent-dialog').close()">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+  </div>
+  <form id="agent-form" onsubmit="submitAgent(event)">
+    <div class="dialog-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="f-name">Agent Name <span style="color:var(--down)">*</span></label>
+          <input type="text" id="f-name" placeholder="e.g. Branch Office Agent" required>
+        </div>
+        <div class="form-group">
+          <label for="f-location">Location</label>
+          <input type="text" id="f-location" placeholder="e.g. Miami Branch">
+        </div>
+      </div>
+    </div>
+    <div class="dialog-footer">
+      <button type="button" class="btn btn-ghost" onclick="document.getElementById('agent-dialog').close()">Cancel</button>
+      <button type="submit" class="btn btn-primary">
+        <i class="fa-solid fa-key"></i> Create &amp; Get API Key
+      </button>
+    </div>
+  </form>
+</dialog>
+
+<!-- API Key Reveal Dialog -->
+<dialog id="apikey-dialog">
+  <div class="dialog-header">
+    <h3><i class="fa-solid fa-key" style="margin-right:6px;color:#f39c12"></i>Agent Created</h3>
+  </div>
+  <div class="dialog-body">
+    <div class="warning-box">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+      <span>Copy this API key now — it will <strong>not</strong> be shown again.</span>
+    </div>
+    <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">API Key</label>
+    <div class="api-key-box" id="apikey-value"></div>
+    <button class="btn btn-ghost btn-sm" style="margin-bottom:16px" onclick="copyApiKey()">
+      <i class="fa-solid fa-copy"></i> Copy to clipboard
+    </button>
+
+    <p style="font-size:14px;font-weight:600;margin-bottom:12px;color:var(--text-primary)">
+      Setup instructions
+    </p>
+    <div class="setup-steps">
+      <div class="step"><span class="step-num">1</span>
+        <span>Copy the <code>agent/</code> folder to a machine inside the target network that has internet access back to this server.</span>
+      </div>
+      <div class="step"><span class="step-num">2</span>
+        <span>Install Node.js on that machine, then run <code>npm install</code> inside the <code>agent/</code> folder.</span>
+      </div>
+      <div class="step"><span class="step-num">3</span>
+        <span>Copy <code>config.example.json</code> → <code>config.json</code> and fill in your server URL and the API key above.</span>
+      </div>
+      <div class="step"><span class="step-num">4</span>
+        <span>Run <code>node agent.js</code> (or install as a service — see README). The agent will check in immediately.</span>
+      </div>
+      <div class="step"><span class="step-num">5</span>
+        <span>Go to <strong>Devices</strong> and assign devices to this agent. The agent will start monitoring them on the next poll cycle.</span>
+      </div>
+    </div>
+  </div>
+  <div class="dialog-footer">
+    <button class="btn btn-primary" onclick="document.getElementById('apikey-dialog').close(); loadAgents()">
+      <i class="fa-solid fa-check"></i> Done
+    </button>
+  </div>
+</dialog>
+
+<!-- Delete Confirm -->
+<dialog id="confirm-dialog">
+  <div class="dialog-header">
+    <h3>Delete Agent</h3>
+    <button class="btn-icon" onclick="document.getElementById('confirm-dialog').close()">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+  </div>
+  <div class="dialog-body">
+    <p>Delete agent <strong id="confirm-name"></strong>?</p>
+    <p style="margin-top:8px;color:var(--text-secondary);font-size:13px">
+      Its assigned devices will be unassigned (not deleted) and will fall back to direct polling.
+    </p>
+  </div>
+  <div class="dialog-footer">
+    <button class="btn btn-ghost" onclick="document.getElementById('confirm-dialog').close()">Cancel</button>
+    <button class="btn btn-danger" id="confirm-delete-btn">
+      <i class="fa-solid fa-trash"></i> Delete
+    </button>
+  </div>
+</dialog>
+
+<script src="assets/app.js"></script>
+<script>
+  let agents = [];
+
+  function agentStatusClass(lastSeen) {
+    if (!lastSeen) return 'never';
+    const diffMin = (Date.now() - new Date(lastSeen + (lastSeen.endsWith('Z') ? '' : 'Z'))) / 60000;
+    if (diffMin < 2)  return 'online';
+    if (diffMin < 10) return 'delayed';
+    return 'offline';
+  }
+
+  function agentStatusLabel(cls) {
+    return { online: 'Online', delayed: 'Delayed', offline: 'Offline', never: 'Never connected' }[cls];
+  }
+
+  async function loadAgents() {
+    try {
+      agents = await api.get('/api/agents');
+      renderTable();
+    } catch (err) {
+      showToast('Failed to load agents', 'error');
+    }
+  }
+
+  function renderTable() {
+    const wrap = document.getElementById('table-wrap');
+    document.getElementById('agent-count').textContent =
+      `${agents.length} agent${agents.length !== 1 ? 's' : ''}`;
+
+    if (agents.length === 0) {
+      wrap.innerHTML = `<div class="empty-state">
+        <i class="fa-solid fa-satellite-dish"></i>
+        <p>No agents registered. Click <strong>New Agent</strong> to create one.</p>
+      </div>`;
+      return;
+    }
+
+    const rows = agents.map(a => {
+      const sc = agentStatusClass(a.last_seen);
+      return `<tr>
+        <td>
+          <span class="agent-status-dot ${sc}" title="${agentStatusLabel(sc)}"></span>
+          <strong>${escHtml(a.name)}</strong>
+        </td>
+        <td style="color:var(--text-secondary)">${escHtml(a.location || '—')}</td>
+        <td>
+          <span class="status-badge ${sc === 'online' ? 'up' : sc === 'delayed' ? '' : 'down'}"
+                style="${sc === 'delayed' ? 'background:rgba(243,156,18,0.12);color:#b7770d' : ''}">
+            ${agentStatusLabel(sc)}
+          </span>
+        </td>
+        <td style="color:var(--text-secondary);font-size:13px">${timeAgo(a.last_seen)}</td>
+        <td>
+          <span class="type-badge"><i class="fa-solid fa-server"></i> ${a.device_count} device${a.device_count !== 1 ? 's' : ''}</span>
+        </td>
+        <td style="color:var(--text-secondary);font-size:13px">${new Date(a.created_at).toLocaleDateString()}</td>
+        <td>
+          <button class="btn-icon danger" title="Delete agent" onclick="openDeleteConfirm(${a.id})">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+        </td>
+      </tr>`;
+    }).join('');
+
+    wrap.innerHTML = `<table class="data-table">
+      <thead>
+        <tr>
+          <th>Agent Name</th>
+          <th>Location</th>
+          <th>Status</th>
+          <th>Last Seen</th>
+          <th>Devices</th>
+          <th>Created</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  }
+
+  function openAddDialog() {
+    document.getElementById('agent-form').reset();
+    document.getElementById('agent-dialog').showModal();
+  }
+
+  async function submitAgent(e) {
+    e.preventDefault();
+    const payload = {
+      name:     document.getElementById('f-name').value.trim(),
+      location: document.getElementById('f-location').value.trim() || null,
+    };
+    try {
+      const res = await api.post('/api/agents', payload);
+      document.getElementById('agent-dialog').close();
+      document.getElementById('apikey-value').textContent = res.api_key;
+      document.getElementById('apikey-dialog').showModal();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  }
+
+  function copyApiKey() {
+    const key = document.getElementById('apikey-value').textContent;
+    navigator.clipboard.writeText(key).then(() => showToast('API key copied!'));
+  }
+
+  function openDeleteConfirm(id) {
+    const a = agents.find(x => x.id === id);
+    if (!a) return;
+    document.getElementById('confirm-name').textContent = a.name;
+    document.getElementById('confirm-delete-btn').onclick = async () => {
+      try {
+        await api.del(`/api/agents/${id}`);
+        document.getElementById('confirm-dialog').close();
+        showToast('Agent deleted');
+        await loadAgents();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    };
+    document.getElementById('confirm-dialog').showModal();
+  }
+
+  function escHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  loadAgents();
+  setInterval(loadAgents, 30000);
+</script>
+</body>
+</html>

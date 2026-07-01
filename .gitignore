@@ -1,0 +1,5 @@
+node_modules/
+monitor.db
+*.db-shm
+*.db-wal
+agent/config.json
