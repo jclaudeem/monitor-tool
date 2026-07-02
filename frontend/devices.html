@@ -6,10 +6,45 @@
   <title>Monitor Tool — Devices</title>
   <link rel="stylesheet" href="assets/style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    .snmp-toggle-row { display:flex; align-items:center; gap:12px; margin-bottom:4px; }
+    .toggle-switch { position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0; }
+    .toggle-switch input { opacity:0; width:0; height:0; }
+    .toggle-slider { position:absolute; inset:0; background:#ccc; border-radius:24px; cursor:pointer; transition:.2s; }
+    .toggle-slider:before { content:''; position:absolute; width:18px; height:18px; left:3px; bottom:3px; background:#fff; border-radius:50%; transition:.2s; }
+    .toggle-switch input:checked + .toggle-slider { background:var(--primary); }
+    .toggle-switch input:checked + .toggle-slider:before { transform:translateX(20px); }
+    .snmp-fields { display:none; }
+    .snmp-fields.visible { display:flex; gap:16px; }
+    .snmp-badge { display:inline-flex; align-items:center; gap:4px; font-size:11px; padding:2px 7px; border-radius:4px; background:#e8f4fd; color:#2980b9; font-weight:600; }
+
+    /* SNMP detail modal */
+    #snmp-dialog { max-width:720px; width:95vw; }
+    .snmp-section { margin-bottom:20px; }
+    .snmp-section h4 { font-size:13px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
+    .snmp-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px; }
+    .snmp-kv { background:var(--bg); border-radius:6px; padding:10px 12px; }
+    .snmp-kv .label { font-size:11px; color:var(--text-secondary); margin-bottom:3px; }
+    .snmp-kv .value { font-size:13px; font-weight:600; word-break:break-all; }
+    .iface-table, .iface-table th, .iface-table td { border:1px solid var(--border); }
+    .iface-table { width:100%; border-collapse:collapse; font-size:12px; }
+    .iface-table th { background:var(--bg); font-weight:700; padding:6px 10px; text-align:left; }
+    .iface-table td { padding:5px 10px; }
+    .iface-up   { color:var(--up); }
+    .iface-down { color:var(--down); }
+    .bar-wrap { background:var(--bg); border-radius:6px; overflow:hidden; height:6px; margin-top:4px; }
+    .bar-fill  { height:100%; border-radius:6px; background:var(--primary); }
+    .bar-fill.warn { background:#e67e22; }
+    .bar-fill.crit { background:var(--down); }
+    .snmp-ts { font-size:11px; color:var(--text-secondary); margin-bottom:14px; }
+    .cpu-chips { display:flex; gap:8px; flex-wrap:wrap; }
+    .cpu-chip { background:var(--bg); border-radius:6px; padding:8px 14px; text-align:center; min-width:64px; }
+    .cpu-chip .pct { font-size:18px; font-weight:700; }
+    .cpu-chip .lbl { font-size:11px; color:var(--text-secondary); }
+  </style>
 </head>
 <body>
 
-<!-- Sidebar -->
 <aside class="sidebar">
   <div class="sidebar-logo">
     <h1><i class="fa-solid fa-chart-network" style="margin-right:8px;color:#2980b9"></i>Monitor Tool</h1>
@@ -17,19 +52,12 @@
   </div>
   <nav class="sidebar-nav">
     <div class="nav-label">Main</div>
-    <a href="index.html" class="nav-link">
-      <i class="fa-solid fa-gauge"></i> Dashboard
-    </a>
-    <a href="devices.html" class="nav-link active">
-      <i class="fa-solid fa-server"></i> Devices
-    </a>
-    <a href="agents.html" class="nav-link">
-      <i class="fa-solid fa-satellite-dish"></i> Agents
-    </a>
+    <a href="index.html" class="nav-link"><i class="fa-solid fa-gauge"></i> Dashboard</a>
+    <a href="devices.html" class="nav-link active"><i class="fa-solid fa-server"></i> Devices</a>
+    <a href="agents.html" class="nav-link"><i class="fa-solid fa-satellite-dish"></i> Agents</a>
   </nav>
 </aside>
 
-<!-- Main -->
 <div class="main">
   <header class="topbar">
     <h2>Devices</h2>
@@ -95,9 +123,33 @@
           <option value="">Server — Direct polling</option>
         </select>
         <p style="font-size:12px;color:var(--text-secondary);margin-top:4px">
-          Choose an agent if this device is on a private network not reachable from the server.
+          Choose an agent if this device is on a private network.
           <a href="agents.html" target="_blank">Manage agents →</a>
         </p>
+      </div>
+
+      <!-- SNMP -->
+      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
+        <div class="snmp-toggle-row">
+          <label class="toggle-switch">
+            <input type="checkbox" id="f-snmp-enabled" onchange="toggleSnmpFields()">
+            <span class="toggle-slider"></span>
+          </label>
+          <div>
+            <div style="font-weight:600;font-size:14px">Enable SNMP Polling</div>
+            <div style="font-size:12px;color:var(--text-secondary)">Collects system info, interface traffic, CPU &amp; memory via SNMP v2c</div>
+          </div>
+        </div>
+        <div class="snmp-fields form-row" id="snmp-fields">
+          <div class="form-group">
+            <label for="f-snmp-community">Community String</label>
+            <input type="text" id="f-snmp-community" placeholder="public" value="public">
+          </div>
+          <div class="form-group" style="max-width:120px">
+            <label for="f-snmp-port">Port</label>
+            <input type="number" id="f-snmp-port" placeholder="161" value="161" min="1" max="65535">
+          </div>
+        </div>
       </div>
     </div>
     <div class="dialog-footer">
@@ -107,6 +159,19 @@
       </button>
     </div>
   </form>
+</dialog>
+
+<!-- SNMP Detail Dialog -->
+<dialog id="snmp-dialog">
+  <div class="dialog-header">
+    <h3 id="snmp-dialog-title">SNMP Data</h3>
+    <button class="btn-icon" onclick="document.getElementById('snmp-dialog').close()">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+  </div>
+  <div class="dialog-body" id="snmp-body">
+    <div class="empty-state"><div class="spinner"></div></div>
+  </div>
 </dialog>
 
 <!-- Confirm Delete Dialog -->
@@ -120,7 +185,7 @@
   <div class="dialog-body">
     <p>Delete <strong id="confirm-name"></strong>?</p>
     <p style="margin-top:8px;color:var(--text-secondary);font-size:13px">
-      All poll history for this device will also be deleted.
+      All poll history and SNMP data for this device will also be deleted.
     </p>
   </div>
   <div class="dialog-footer">
@@ -161,14 +226,20 @@
       const monitoredBy = d.agent_name
         ? `<span class="type-badge"><i class="fa-solid fa-satellite-dish"></i> ${escHtml(d.agent_name)}</span>`
         : `<span style="color:var(--text-secondary);font-size:12px">Direct</span>`;
+      const snmpBadge = d.snmp_enabled
+        ? `<span class="snmp-badge"><i class="fa-solid fa-network-wired"></i> SNMP</span>`
+        : '';
       return `<tr>
-        <td><strong>${escHtml(d.name)}</strong></td>
+        <td><strong>${escHtml(d.name)}</strong> ${snmpBadge}</td>
         <td><code style="font-size:13px">${escHtml(d.ip_address)}</code></td>
         <td><span class="type-badge"><i class="${deviceTypeIcon(d.type)}"></i> ${escHtml(d.type)}</span></td>
         <td style="color:var(--text-secondary)">${escHtml(d.location || '—')}</td>
         <td>${monitoredBy}</td>
         <td style="color:var(--text-secondary);font-size:13px">${new Date(d.created_at).toLocaleDateString()}</td>
         <td>
+          ${d.snmp_enabled ? `<button class="btn-icon" title="View SNMP" onclick="openSnmpDialog(${d.id}, '${escHtml(d.name)}')">
+            <i class="fa-solid fa-network-wired" style="color:#2980b9"></i>
+          </button>` : ''}
           <button class="btn-icon" title="Edit" onclick="openEditDialog(${d.id})">
             <i class="fa-solid fa-pen"></i>
           </button>
@@ -182,17 +253,17 @@
     wrap.innerHTML = `<table class="data-table">
       <thead>
         <tr>
-          <th>Name</th>
-          <th>IP Address</th>
-          <th>Type</th>
-          <th>Location</th>
-          <th>Monitored By</th>
-          <th>Added</th>
-          <th>Actions</th>
+          <th>Name</th><th>IP Address</th><th>Type</th>
+          <th>Location</th><th>Monitored By</th><th>Added</th><th>Actions</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
     </table>`;
+  }
+
+  function toggleSnmpFields() {
+    const on = document.getElementById('f-snmp-enabled').checked;
+    document.getElementById('snmp-fields').classList.toggle('visible', on);
   }
 
   function populateAgentSelect(selectedId) {
@@ -212,6 +283,9 @@
     document.getElementById('submit-btn').innerHTML = '<i class="fa-solid fa-plus"></i> Add Device';
     document.getElementById('edit-id').value = '';
     document.getElementById('device-form').reset();
+    document.getElementById('f-snmp-community').value = 'public';
+    document.getElementById('f-snmp-port').value = '161';
+    document.getElementById('snmp-fields').classList.remove('visible');
     populateAgentSelect(null);
     document.getElementById('device-dialog').showModal();
   }
@@ -221,29 +295,34 @@
     if (!d) return;
     document.getElementById('dialog-title').textContent = 'Edit Device';
     document.getElementById('submit-btn').innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Changes';
-    document.getElementById('edit-id').value   = id;
-    document.getElementById('f-name').value    = d.name;
-    document.getElementById('f-ip').value      = d.ip_address;
-    document.getElementById('f-type').value    = d.type;
-    document.getElementById('f-location').value = d.location || '';
+    document.getElementById('edit-id').value        = id;
+    document.getElementById('f-name').value         = d.name;
+    document.getElementById('f-ip').value           = d.ip_address;
+    document.getElementById('f-type').value         = d.type;
+    document.getElementById('f-location').value     = d.location || '';
+    document.getElementById('f-snmp-enabled').checked = !!d.snmp_enabled;
+    document.getElementById('f-snmp-community').value = d.snmp_community || 'public';
+    document.getElementById('f-snmp-port').value      = d.snmp_port || 161;
+    document.getElementById('snmp-fields').classList.toggle('visible', !!d.snmp_enabled);
     populateAgentSelect(d.agent_id);
     document.getElementById('device-dialog').showModal();
   }
 
-  function closeDialog() {
-    document.getElementById('device-dialog').close();
-  }
+  function closeDialog() { document.getElementById('device-dialog').close(); }
 
   async function submitDevice(e) {
     e.preventDefault();
-    const id = document.getElementById('edit-id').value;
+    const id      = document.getElementById('edit-id').value;
     const agentVal = document.getElementById('f-agent').value;
     const payload = {
-      name:       document.getElementById('f-name').value.trim(),
-      ip_address: document.getElementById('f-ip').value.trim(),
-      type:       document.getElementById('f-type').value,
-      location:   document.getElementById('f-location').value.trim() || null,
-      agent_id:   agentVal ? parseInt(agentVal) : null,
+      name:           document.getElementById('f-name').value.trim(),
+      ip_address:     document.getElementById('f-ip').value.trim(),
+      type:           document.getElementById('f-type').value,
+      location:       document.getElementById('f-location').value.trim() || null,
+      agent_id:       agentVal ? parseInt(agentVal) : null,
+      snmp_enabled:   document.getElementById('f-snmp-enabled').checked,
+      snmp_community: document.getElementById('f-snmp-community').value.trim() || 'public',
+      snmp_port:      parseInt(document.getElementById('f-snmp-port').value) || 161,
     };
     const btn = document.getElementById('submit-btn');
     btn.disabled = true;
@@ -253,7 +332,7 @@
         showToast('Device updated');
       } else {
         await api.post('/api/devices', payload);
-        showToast('Device added — first poll in progress');
+        showToast('Device added');
       }
       closeDialog();
       await loadAll();
@@ -263,6 +342,129 @@
       btn.disabled = false;
     }
   }
+
+  // ── SNMP Detail ───────────────────────────────────────────────────────────
+
+  async function openSnmpDialog(deviceId, name) {
+    document.getElementById('snmp-dialog-title').textContent = `SNMP — ${name}`;
+    document.getElementById('snmp-body').innerHTML =
+      '<div class="empty-state"><div class="spinner"></div></div>';
+    document.getElementById('snmp-dialog').showModal();
+
+    try {
+      const rows = await api.get(`/api/snmp/${deviceId}`);
+      if (!rows || rows.length === 0) {
+        document.getElementById('snmp-body').innerHTML =
+          '<div class="empty-state"><i class="fa-solid fa-network-wired"></i>' +
+          '<p>No SNMP data yet. The agent will collect it on the next poll cycle (up to 60s).</p></div>';
+        return;
+      }
+      renderSnmp(rows[0]);
+    } catch (err) {
+      document.getElementById('snmp-body').innerHTML =
+        `<div class="empty-state"><p style="color:var(--down)">${escHtml(err.message)}</p></div>`;
+    }
+  }
+
+  function fmtBytes(b) {
+    if (b == null) return '—';
+    if (b >= 1e9) return (b/1e9).toFixed(1) + ' GB';
+    if (b >= 1e6) return (b/1e6).toFixed(1) + ' MB';
+    if (b >= 1e3) return (b/1e3).toFixed(1) + ' KB';
+    return b + ' B';
+  }
+
+  function fmtUptime(hundredths) {
+    if (hundredths == null) return '—';
+    const secs = Math.floor(hundredths / 100);
+    const d = Math.floor(secs/86400), h = Math.floor((secs%86400)/3600),
+          m = Math.floor((secs%3600)/60), s = secs%60;
+    return [d&&`${d}d`, h&&`${h}h`, m&&`${m}m`, `${s}s`].filter(Boolean).join(' ');
+  }
+
+  function pctColor(pct) {
+    if (pct >= 90) return 'crit';
+    if (pct >= 70) return 'warn';
+    return '';
+  }
+
+  function renderSnmp(row) {
+    let html = `<div class="snmp-ts">Last polled: ${new Date(row.polled_at).toLocaleString()}</div>`;
+
+    // System info
+    if (row.system) {
+      const s = row.system;
+      html += `<div class="snmp-section">
+        <h4><i class="fa-solid fa-circle-info"></i> System</h4>
+        <div class="snmp-grid">
+          <div class="snmp-kv"><div class="label">Description</div><div class="value">${escHtml(s.sysDescr||'—')}</div></div>
+          <div class="snmp-kv"><div class="label">Uptime</div><div class="value">${fmtUptime(s.sysUptime)}</div></div>
+          <div class="snmp-kv"><div class="label">Contact</div><div class="value">${escHtml(s.sysContact||'—')}</div></div>
+          <div class="snmp-kv"><div class="label">Location</div><div class="value">${escHtml(s.sysLocation||'—')}</div></div>
+        </div>
+      </div>`;
+    }
+
+    // CPU
+    if (row.cpu && row.cpu.length > 0) {
+      const chips = row.cpu.map((pct, i) =>
+        `<div class="cpu-chip">
+          <div class="pct" style="color:${pct>=90?'var(--down)':pct>=70?'#e67e22':'var(--text-primary)'}">${pct}%</div>
+          <div class="lbl">CPU ${i+1}</div>
+          <div class="bar-wrap"><div class="bar-fill ${pctColor(pct)}" style="width:${pct}%"></div></div>
+        </div>`
+      ).join('');
+      html += `<div class="snmp-section">
+        <h4><i class="fa-solid fa-microchip"></i> CPU Load</h4>
+        <div class="cpu-chips">${chips}</div>
+      </div>`;
+    }
+
+    // Memory
+    if (row.memory && row.memory.length > 0) {
+      const memHtml = row.memory.map(m => {
+        const pct = m.totalBytes > 0 ? Math.round(m.usedBytes/m.totalBytes*100) : 0;
+        return `<div class="snmp-kv">
+          <div class="label">${escHtml(m.desc)}</div>
+          <div class="value">${fmtBytes(m.usedBytes)} / ${fmtBytes(m.totalBytes)}</div>
+          <div class="bar-wrap"><div class="bar-fill ${pctColor(pct)}" style="width:${pct}%"></div></div>
+          <div style="font-size:11px;color:var(--text-secondary);margin-top:3px">${pct}% used</div>
+        </div>`;
+      }).join('');
+      html += `<div class="snmp-section">
+        <h4><i class="fa-solid fa-memory"></i> Memory / Storage</h4>
+        <div class="snmp-grid">${memHtml}</div>
+      </div>`;
+    }
+
+    // Interfaces
+    if (row.interfaces && row.interfaces.length > 0) {
+      const ifRows = row.interfaces.map(i =>
+        `<tr>
+          <td>${escHtml(i.ifDescr)}</td>
+          <td class="${i.ifOperStatus===1?'iface-up':'iface-down'}">
+            <i class="fa-solid fa-circle" style="font-size:8px"></i>
+            ${i.ifOperStatus===1?'Up':'Down'}
+          </td>
+          <td>${fmtBytes(i.ifInOctets)}</td>
+          <td>${fmtBytes(i.ifOutOctets)}</td>
+        </tr>`
+      ).join('');
+      html += `<div class="snmp-section">
+        <h4><i class="fa-solid fa-ethernet"></i> Interfaces</h4>
+        <div style="overflow-x:auto">
+          <table class="iface-table">
+            <thead><tr><th>Interface</th><th>Status</th><th>In</th><th>Out</th></tr></thead>
+            <tbody>${ifRows}</tbody>
+          </table>
+        </div>
+      </div>`;
+    }
+
+    document.getElementById('snmp-body').innerHTML = html;
+  }
+
+  // ── Delete ────────────────────────────────────────────────────────────────
 
   function openDeleteConfirm(id) {
     const d = devices.find(x => x.id === id);
@@ -282,8 +484,8 @@
   }
 
   function escHtml(str) {
-    if (!str) return '';
-    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    if (str == null) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
   loadAll();
