@@ -174,6 +174,7 @@ async function pollSnmpDevices(devices) {
     try {
       const data = await pollSNMP(device);
       log(`[snmp] ${device.name} (${device.ip_address}) -> sys:${!!data.system} ifaces:${data.interfaces.length} cpu:${data.cpu.length} mem:${data.memory.length}`);
+      if (data.errors && data.errors.length > 0) log(`[snmp]   errors: ${data.errors.join(' | ')}`);
       return { device_id: device.id, data };
     } catch (err) {
       log(`[snmp] Error polling ${device.name}: ${err.message}`);
