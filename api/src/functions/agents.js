@@ -3,7 +3,10 @@ const { getPool, sql } = require('../db');
 const crypto = require('crypto');
 
 async function resolveAgent(req) {
-  const auth = req.headers.get('authorization') || '';
+  // headers may be a plain object or a Headers instance depending on runtime
+  const auth = (typeof req.headers.get === 'function'
+    ? req.headers.get('authorization')
+    : req.headers['authorization']) || '';
   if (!auth.startsWith('Bearer ')) return null;
   const apiKey = auth.slice(7);
   const pool = await getPool();
@@ -96,7 +99,11 @@ app.http('getAgentDevices', {
   authLevel: 'anonymous',
   route: 'agents/devices',
   handler: async (req, ctx) => {
-    const agent = await resolveAgent(req);
+    let agent;
+    try { agent = await resolveAgent(req); } catch (err) {
+      ctx.error('resolveAgent (getAgentDevices):', err.message);
+      return { status: 500, jsonBody: { error: 'Auth error' } };
+    }
     if (!agent) return { status: 401, jsonBody: { error: 'Invalid or missing API key' } };
     try {
       const pool = await getPool();
@@ -119,7 +126,11 @@ app.http('agentReport', {
   authLevel: 'anonymous',
   route: 'agents/report',
   handler: async (req, ctx) => {
-    const agent = await resolveAgent(req);
+    let agent;
+    try { agent = await resolveAgent(req); } catch (err) {
+      ctx.error('resolveAgent (agentReport):', err.message);
+      return { status: 500, jsonBody: { error: 'Auth error' } };
+    }
     if (!agent) return { status: 401, jsonBody: { error: 'Invalid or missing API key' } };
 
     const { results } = await req.json();
