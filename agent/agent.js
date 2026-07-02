@@ -4,12 +4,80 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
+const { execSync } = require('child_process');
+const { pollSNMP } = require('./snmp');
 
-// When running as a pkg .exe, save config next to the exe; otherwise next to the script
 const CONFIG_DIR = process.pkg ? path.dirname(process.execPath) : __dirname;
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
+const LOG_PATH    = path.join(CONFIG_DIR, 'MonitorAgent.log');
+const TASK_NAME   = 'MonitorToolAgent';
+
+// ── Logging ──────────────────────────────────────────────────────────────────
+
+const HAS_TTY = Boolean(process.stdout.isTTY);
+
+function log(msg) {
+  const line = `[${new Date().toISOString()}] ${msg}`;
+  if (HAS_TTY) console.log(line);
+  try { fs.appendFileSync(LOG_PATH, line + '\n'); } catch {}
+}
+
+function trimLog() {
+  try {
+    const content = fs.readFileSync(LOG_PATH, 'utf-8');
+    const lines = content.split('\n');
+    if (lines.length > 2000) {
+      fs.writeFileSync(LOG_PATH, lines.slice(-1000).join('\n'));
+    }
+  } catch {}
+}
+
+// ── Service install / uninstall ───────────────────────────────────────────────
+
+function installService() {
+  const exePath = process.pkg ? process.execPath : path.resolve(process.argv[1]);
+
+  if (!fs.existsSync(CONFIG_PATH)) {
+    console.error('\n[install] No config.json found. Run without --install first to set up the server URL and API key.\n');
+    process.exit(1);
+  }
+
+  console.log('\n[install] Registering Windows startup task...');
+  try {
+    // Quote the exe path in case it contains spaces
+    const tr = `\\"${exePath}\\"`;
+    execSync(
+      `schtasks /create /tn "${TASK_NAME}" /tr ${tr} /sc ONSTART /ru SYSTEM /rl HIGHEST /f`,
+      { stdio: 'inherit' }
+    );
+    console.log(`\n[install] Done! "${TASK_NAME}" will start automatically on next system boot.`);
+    console.log('[install] To remove the service: MonitorAgent.exe --uninstall');
+    console.log('[install] Log file: ' + LOG_PATH);
+  } catch (err) {
+    console.error('\n[install] Failed — try running as Administrator.');
+    process.exit(1);
+  }
+}
+
+function uninstallService() {
+  console.log('\n[uninstall] Removing Windows startup task...');
+  try { execSync(`schtasks /end /tn "${TASK_NAME}"`, { stdio: 'pipe' }); } catch {}
+  try {
+    execSync(`schtasks /delete /tn "${TASK_NAME}" /f`, { stdio: 'inherit' });
+    console.log(`[uninstall] "${TASK_NAME}" removed.`);
+  } catch {
+    console.error('[uninstall] Task not found or already removed.');
+  }
+}
+
+// ── Config ───────────────────────────────────────────────────────────────────
 
 async function promptSetup() {
+  if (!HAS_TTY) {
+    log('[error] No config.json found and no terminal available for setup. Run MonitorAgent.exe interactively first.');
+    process.exit(1);
+  }
+
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const ask = (q) => new Promise(res => rl.question(q, res));
 
@@ -35,9 +103,7 @@ async function promptSetup() {
 }
 
 async function loadConfig() {
-  if (!fs.existsSync(CONFIG_PATH)) {
-    return promptSetup();
-  }
+  if (!fs.existsSync(CONFIG_PATH)) return promptSetup();
   let cfg;
   try {
     cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
@@ -47,13 +113,15 @@ async function loadConfig() {
     return promptSetup();
   }
   if (!cfg.serverUrl || !cfg.apiKey) {
-    console.error('[agent] config.json is missing serverUrl or apiKey — re-running setup.');
+    console.error('[agent] config.json missing serverUrl or apiKey — re-running setup.');
     fs.unlinkSync(CONFIG_PATH);
     return promptSetup();
   }
   cfg.pollInterval = cfg.pollInterval || 60;
   return cfg;
 }
+
+// ── Monitoring ───────────────────────────────────────────────────────────────
 
 function parseResponseTime(timeStr) {
   if (!timeStr || timeStr === 'unknown') return null;
@@ -76,10 +144,10 @@ async function pollDevices(devices) {
       const res = await ping.promise.probe(device.ip_address, { timeout: 5 });
       const status = res.alive ? 'up' : 'down';
       const responseTime = res.alive ? parseResponseTime(res.time) : null;
-      console.log(`[poll] ${device.name} (${device.ip_address}) -> ${res.alive ? `UP ${res.time}ms` : 'DOWN'}`);
+      log(`[poll] ${device.name} (${device.ip_address}) -> ${res.alive ? `UP ${res.time}ms` : 'DOWN'}`);
       return { device_id: device.id, status, response_time: responseTime };
     } catch (err) {
-      console.error(`[poll] Error pinging ${device.name} (${device.ip_address}): ${err.message}`);
+      log(`[poll] Error pinging ${device.name} (${device.ip_address}): ${err.message}`);
       return { device_id: device.id, status: 'down', response_time: null };
     }
   }));
@@ -87,45 +155,88 @@ async function pollDevices(devices) {
 
 async function sendReport(config, results) {
   await axios.post(`${config.serverUrl}/api/agentreport`, { results }, {
-    headers: {
-      'X-Agent-Key': config.apiKey,
-      'Content-Type': 'application/json',
-    },
+    headers: { 'X-Agent-Key': config.apiKey, 'Content-Type': 'application/json' },
     timeout: 15000,
   });
+}
+
+async function sendSnmpReport(config, results) {
+  await axios.post(`${config.serverUrl}/api/agentsnmp`, { results }, {
+    headers: { 'X-Agent-Key': config.apiKey, 'Content-Type': 'application/json' },
+    timeout: 15000,
+  });
+}
+
+async function pollSnmpDevices(devices) {
+  const snmpDevices = devices.filter(d => d.snmp_enabled);
+  if (snmpDevices.length === 0) return [];
+  return Promise.all(snmpDevices.map(async (device) => {
+    try {
+      const data = await pollSNMP(device);
+      log(`[snmp] ${device.name} (${device.ip_address}) -> sys:${!!data.system} ifaces:${data.interfaces.length} cpu:${data.cpu.length} mem:${data.memory.length}`);
+      return { device_id: device.id, data };
+    } catch (err) {
+      log(`[snmp] Error polling ${device.name}: ${err.message}`);
+      return null;
+    }
+  })).then(r => r.filter(Boolean));
 }
 
 async function cycle(config) {
   try {
     const devices = await fetchDevices(config);
     if (devices.length === 0) {
-      console.log('[agent] No devices assigned yet — assign devices via the dashboard.');
+      log('[agent] No devices assigned yet — assign devices via the dashboard.');
       return;
     }
-    const results = await pollDevices(devices);
-    await sendReport(config, results);
-    console.log(`[agent] Reported ${results.length} result(s) -> ${config.serverUrl}`);
+
+    // Ping poll (all devices)
+    const pingResults = await pollDevices(devices);
+    await sendReport(config, pingResults);
+    log(`[agent] Ping: reported ${pingResults.length} result(s)`);
+
+    // SNMP poll (SNMP-enabled devices only)
+    const snmpResults = await pollSnmpDevices(devices);
+    if (snmpResults.length > 0) {
+      await sendSnmpReport(config, snmpResults);
+      log(`[agent] SNMP: reported ${snmpResults.length} result(s)`);
+    }
   } catch (err) {
     if (err.response) {
-      console.error(`[agent] Server error ${err.response.status}: ${JSON.stringify(err.response.data)}`);
+      log(`[agent] Server error ${err.response.status}: ${JSON.stringify(err.response.data)}`);
     } else if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND') {
-      console.error(`[agent] Cannot reach server at ${config.serverUrl} — will retry next cycle`);
+      log(`[agent] Cannot reach server at ${config.serverUrl} — will retry next cycle`);
     } else {
-      console.error(`[agent] Unexpected error: ${err.message}`);
+      log(`[agent] Unexpected error: ${err.message}`);
     }
   }
 }
 
+// ── Entry point ───────────────────────────────────────────────────────────────
+
 async function main() {
-  console.log('');
-  console.log('  +---------------------------------+');
-  console.log('  |   Monitor Tool Agent  v1.0      |');
-  console.log('  +---------------------------------+');
+  const args = process.argv.slice(2);
+
+  if (args.includes('--install'))   { installService();   process.exit(0); }
+  if (args.includes('--uninstall')) { uninstallService(); process.exit(0); }
+
+  if (HAS_TTY) {
+    console.log('');
+    console.log('  +---------------------------------+');
+    console.log('  |   Monitor Tool Agent  v1.0      |');
+    console.log('  +---------------------------------+');
+  }
 
   const config = await loadConfig();
 
-  console.log(`\n[agent] Server : ${config.serverUrl}`);
-  console.log(`[agent] Polling every ${config.pollInterval}s\n`);
+  trimLog();
+  log(`[agent] Starting — server: ${config.serverUrl}`);
+  log(`[agent] Polling every ${config.pollInterval}s`);
+  if (HAS_TTY) {
+    console.log('\n  Run with --install  to register as a Windows startup service');
+    console.log('  Run with --uninstall to remove the startup service');
+    console.log(`  Log file: ${LOG_PATH}\n`);
+  }
 
   await cycle(config);
   cron.schedule('* * * * *', () => cycle(config));

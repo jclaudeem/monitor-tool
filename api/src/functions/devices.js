@@ -37,22 +37,25 @@ app.http('createDevice', {
   authLevel: 'anonymous',
   route: 'devices',
   handler: async (req, ctx) => {
-    const { name, ip_address, type, location, agent_id } = await req.json();
+    const { name, ip_address, type, location, agent_id, snmp_enabled, snmp_community, snmp_port } = await req.json();
     if (!name || !ip_address) {
       return { status: 400, jsonBody: { error: 'name and ip_address are required' } };
     }
     try {
       const pool = await getPool();
       const result = await pool.request()
-        .input('name',       sql.NVarChar(255), name.trim())
-        .input('ip_address', sql.NVarChar(50),  ip_address.trim())
-        .input('type',       sql.NVarChar(50),  type || 'device')
-        .input('location',   sql.NVarChar(255), location?.trim() || null)
-        .input('agent_id',   sql.Int,           agent_id || null)
+        .input('name',          sql.NVarChar(255), name.trim())
+        .input('ip_address',    sql.NVarChar(50),  ip_address.trim())
+        .input('type',          sql.NVarChar(50),  type || 'device')
+        .input('location',      sql.NVarChar(255), location?.trim() || null)
+        .input('agent_id',      sql.Int,           agent_id || null)
+        .input('snmp_enabled',  sql.Bit,           snmp_enabled ? 1 : 0)
+        .input('snmp_community',sql.NVarChar(100), snmp_community || 'public')
+        .input('snmp_port',     sql.Int,           snmp_port || 161)
         .query(`
-          INSERT INTO devices (name, ip_address, type, location, agent_id)
+          INSERT INTO devices (name, ip_address, type, location, agent_id, snmp_enabled, snmp_community, snmp_port)
           OUTPUT INSERTED.id
-          VALUES (@name, @ip_address, @type, @location, @agent_id)
+          VALUES (@name, @ip_address, @type, @location, @agent_id, @snmp_enabled, @snmp_community, @snmp_port)
         `);
       return { status: 201, jsonBody: { id: result.recordset[0].id } };
     } catch (err) {
@@ -70,23 +73,27 @@ app.http('updateDevice', {
   authLevel: 'anonymous',
   route: 'devices/{id}',
   handler: async (req, ctx) => {
-    const { name, ip_address, type, location, agent_id } = await req.json();
+    const { name, ip_address, type, location, agent_id, snmp_enabled, snmp_community, snmp_port } = await req.json();
     if (!name || !ip_address) {
       return { status: 400, jsonBody: { error: 'name and ip_address are required' } };
     }
     try {
       const pool = await getPool();
       const result = await pool.request()
-        .input('id',         sql.Int,           parseInt(req.params.id))
-        .input('name',       sql.NVarChar(255), name.trim())
-        .input('ip_address', sql.NVarChar(50),  ip_address.trim())
-        .input('type',       sql.NVarChar(50),  type || 'device')
-        .input('location',   sql.NVarChar(255), location?.trim() || null)
-        .input('agent_id',   sql.Int,           agent_id || null)
+        .input('id',            sql.Int,           parseInt(req.params.id))
+        .input('name',          sql.NVarChar(255), name.trim())
+        .input('ip_address',    sql.NVarChar(50),  ip_address.trim())
+        .input('type',          sql.NVarChar(50),  type || 'device')
+        .input('location',      sql.NVarChar(255), location?.trim() || null)
+        .input('agent_id',      sql.Int,           agent_id || null)
+        .input('snmp_enabled',  sql.Bit,           snmp_enabled ? 1 : 0)
+        .input('snmp_community',sql.NVarChar(100), snmp_community || 'public')
+        .input('snmp_port',     sql.Int,           snmp_port || 161)
         .query(`
           UPDATE devices
-          SET name=@name, ip_address=@ip_address, type=@type,
-              location=@location, agent_id=@agent_id
+          SET name=@name, ip_address=@ip_address, type=@type, location=@location,
+              agent_id=@agent_id, snmp_enabled=@snmp_enabled,
+              snmp_community=@snmp_community, snmp_port=@snmp_port
           WHERE id=@id
         `);
       if (result.rowsAffected[0] === 0) {

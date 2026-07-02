@@ -109,7 +109,7 @@ app.http('getAgentDevices', {
       const pool = await getPool();
       const devices = await pool.request()
         .input('agent_id', sql.Int, agent.id)
-        .query('SELECT id, name, ip_address, type, location FROM devices WHERE agent_id = @agent_id');
+        .query('SELECT id, name, ip_address, type, location, snmp_enabled, snmp_community, snmp_port FROM devices WHERE agent_id = @agent_id');
       await pool.request()
         .input('id', sql.Int, agent.id)
         .query('UPDATE agents SET last_seen = GETUTCDATE() WHERE id = @id');

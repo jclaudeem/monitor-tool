@@ -71,6 +71,39 @@ async function initSchema() {
     )
     CREATE INDEX idx_poll_device_time ON poll_results(device_id, polled_at DESC)
   `);
+
+  // SNMP columns on devices (added after initial schema)
+  await p.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('devices') AND name='snmp_enabled')
+      ALTER TABLE devices ADD snmp_enabled BIT NOT NULL DEFAULT 0
+  `);
+  await p.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('devices') AND name='snmp_community')
+      ALTER TABLE devices ADD snmp_community NVARCHAR(100) NOT NULL DEFAULT 'public'
+  `);
+  await p.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('devices') AND name='snmp_port')
+      ALTER TABLE devices ADD snmp_port INT NOT NULL DEFAULT 161
+  `);
+
+  await p.request().query(`
+    IF OBJECT_ID('snmp_results', 'U') IS NULL
+    CREATE TABLE snmp_results (
+      id        INT IDENTITY(1,1) PRIMARY KEY,
+      device_id INT NOT NULL,
+      data      NVARCHAR(MAX) NOT NULL,
+      polled_at DATETIME2 DEFAULT GETUTCDATE(),
+      CONSTRAINT FK_snmp_device FOREIGN KEY (device_id)
+        REFERENCES devices(id) ON DELETE CASCADE
+    )
+  `);
+  await p.request().query(`
+    IF NOT EXISTS (
+      SELECT 1 FROM sys.indexes
+      WHERE name='idx_snmp_device_time' AND object_id=OBJECT_ID('snmp_results')
+    )
+    CREATE INDEX idx_snmp_device_time ON snmp_results(device_id, polled_at DESC)
+  `);
 }
 
 module.exports = { getPool, sql };
