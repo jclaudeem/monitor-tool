@@ -3,12 +3,12 @@ const { getPool, sql } = require('../db');
 const crypto = require('crypto');
 
 async function resolveAgent(req) {
-  // headers may be a plain object or a Headers instance depending on runtime
-  const auth = (typeof req.headers.get === 'function'
-    ? req.headers.get('authorization')
-    : req.headers['authorization']) || '';
-  if (!auth.startsWith('Bearer ')) return null;
-  const apiKey = auth.slice(7);
+  // Use X-Agent-Key instead of Authorization — SWA intercepts Authorization headers
+  const getHeader = (name) => typeof req.headers.get === 'function'
+    ? req.headers.get(name)
+    : req.headers[name];
+  const apiKey = getHeader('x-agent-key') || '';
+  if (!apiKey) return null;
   const pool = await getPool();
   const result = await pool.request()
     .input('key', sql.NVarChar(64), apiKey)
@@ -99,15 +99,24 @@ app.http('getAgentDevices', {
   authLevel: 'anonymous',
   route: 'agentdevices',
   handler: async (req, ctx) => {
+    let agent;
+    try { agent = await resolveAgent(req); } catch (err) {
+      ctx.error('resolveAgent (getAgentDevices):', err.message);
+      return { status: 500, jsonBody: { error: 'Auth error' } };
+    }
+    if (!agent) return { status: 401, jsonBody: { error: 'Invalid or missing API key' } };
     try {
-      const headersType = typeof req.headers;
-      const hasGetFn = typeof req.headers?.get === 'function';
-      const authViaGet = hasGetFn ? req.headers.get('authorization') : undefined;
-      const authViaBracket = req.headers?.['authorization'];
-      const auth = (authViaGet || authViaBracket || '').slice(0, 16);
-      return { jsonBody: { headersType, hasGetFn, auth } };
+      const pool = await getPool();
+      const devices = await pool.request()
+        .input('agent_id', sql.Int, agent.id)
+        .query('SELECT id, name, ip_address, type, location FROM devices WHERE agent_id = @agent_id');
+      await pool.request()
+        .input('id', sql.Int, agent.id)
+        .query('UPDATE agents SET last_seen = GETUTCDATE() WHERE id = @id');
+      return { jsonBody: devices.recordset };
     } catch (err) {
-      return { status: 500, jsonBody: { diagError: String(err) } };
+      ctx.error('getAgentDevices:', err.message);
+      return { status: 500, jsonBody: { error: 'Database error' } };
     }
   }
 });
