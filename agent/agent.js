@@ -63,7 +63,7 @@ function parseResponseTime(timeStr) {
 }
 
 async function fetchDevices(config) {
-  const res = await axios.get(`${config.serverUrl}/api/agent/devices`, {
+  const res = await axios.get(`${config.serverUrl}/api/agentdevices`, {
     headers: { Authorization: `Bearer ${config.apiKey}` },
     timeout: 10000,
   });
@@ -86,7 +86,7 @@ async function pollDevices(devices) {
 }
 
 async function sendReport(config, results) {
-  await axios.post(`${config.serverUrl}/api/agent/report`, { results }, {
+  await axios.post(`${config.serverUrl}/api/agentreport`, { results }, {
     headers: {
       Authorization: `Bearer ${config.apiKey}`,
       'Content-Type': 'application/json',

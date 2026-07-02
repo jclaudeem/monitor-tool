@@ -97,7 +97,7 @@ app.http('deleteAgent', {
 app.http('getAgentDevices', {
   methods: ['GET'],
   authLevel: 'anonymous',
-  route: 'agent/devices',
+  route: 'agentdevices',
   handler: async (req, ctx) => {
     let agent;
     try { agent = await resolveAgent(req); } catch (err) {
@@ -124,7 +124,7 @@ app.http('getAgentDevices', {
 app.http('agentReport', {
   methods: ['POST'],
   authLevel: 'anonymous',
-  route: 'agent/report',
+  route: 'agentreport',
   handler: async (req, ctx) => {
     let agent;
     try { agent = await resolveAgent(req); } catch (err) {
