@@ -4,3 +4,4 @@ monitor.db
 *.db-wal
 agent/config.json
 api/local.settings.json
+agent/dist/

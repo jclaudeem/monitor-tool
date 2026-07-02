@@ -4,11 +4,19 @@
   "description": "Network monitor agent — runs inside a private network and reports to the central Monitor Tool server",
   "main": "agent.js",
   "scripts": {
-    "start": "node agent.js"
+    "start": "node agent.js",
+    "build": "pkg agent.js --targets node20-win-x64 --output dist/MonitorAgent.exe"
   },
   "dependencies": {
     "axios": "^1.6.0",
     "node-cron": "^3.0.3",
     "ping": "^0.4.4"
+  },
+  "devDependencies": {
+    "@yao-pkg/pkg": "^5.11.5"
+  },
+  "pkg": {
+    "assets": [],
+    "targets": ["node20-win-x64"]
   }
 }
