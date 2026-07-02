@@ -99,25 +99,7 @@ app.http('getAgentDevices', {
   authLevel: 'anonymous',
   route: 'agentdevices',
   handler: async (req, ctx) => {
-    let agent;
-    try { agent = await resolveAgent(req); } catch (err) {
-      ctx.error('resolveAgent (getAgentDevices):', err.message);
-      return { status: 500, jsonBody: { error: 'Auth error' } };
-    }
-    if (!agent) return { status: 401, jsonBody: { error: 'Invalid or missing API key' } };
-    try {
-      const pool = await getPool();
-      const devices = await pool.request()
-        .input('agent_id', sql.Int, agent.id)
-        .query('SELECT id, name, ip_address, type, location FROM devices WHERE agent_id = @agent_id');
-      await pool.request()
-        .input('id', sql.Int, agent.id)
-        .query('UPDATE agents SET last_seen = GETUTCDATE() WHERE id = @id');
-      return { jsonBody: devices.recordset };
-    } catch (err) {
-      ctx.error('getAgentDevices:', err.message);
-      return { status: 500, jsonBody: { error: 'Database error' } };
-    }
+    return { jsonBody: { ok: true, probe: 'handler reached' } };
   }
 });
 
