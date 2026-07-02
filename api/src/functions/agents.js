@@ -99,7 +99,16 @@ app.http('getAgentDevices', {
   authLevel: 'anonymous',
   route: 'agentdevices',
   handler: async (req, ctx) => {
-    return { jsonBody: { ok: true, probe: 'handler reached' } };
+    try {
+      const headersType = typeof req.headers;
+      const hasGetFn = typeof req.headers?.get === 'function';
+      const authViaGet = hasGetFn ? req.headers.get('authorization') : undefined;
+      const authViaBracket = req.headers?.['authorization'];
+      const auth = (authViaGet || authViaBracket || '').slice(0, 16);
+      return { jsonBody: { headersType, hasGetFn, auth } };
+    } catch (err) {
+      return { status: 500, jsonBody: { diagError: String(err) } };
+    }
   }
 });
 
