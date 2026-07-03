@@ -166,6 +166,13 @@ app.http('agentReport', {
         .input('id', sql.Int, agent.id)
         .query('UPDATE agents SET last_seen = GETUTCDATE() WHERE id = @id');
 
+      // Prune poll_results older than 7 days
+      for (const devId of [...ownedIds]) {
+        await pool.request()
+          .input('did', sql.Int, devId)
+          .query(`DELETE FROM poll_results WHERE device_id = @did AND polled_at < DATEADD(DAY, -7, GETUTCDATE())`);
+      }
+
       return { jsonBody: { ok: true, accepted } };
     } catch (err) {
       ctx.error('agentReport:', err.message);
