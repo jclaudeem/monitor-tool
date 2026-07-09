@@ -4,22 +4,27 @@ let pool = null;
 let initialized = false;
 
 async function getPool() {
+  // If pool exists but is not connected (e.g. timed out mid-connect on a previous request),
+  // clean it up so we reconnect cleanly — otherwise we'd skip the connect block and
+  // try to use a broken pool, causing every subsequent request to fail.
+  if (pool && !pool.connected && !pool.connecting) {
+    try { pool.close(); } catch {}
+    pool = null;
+    initialized = false;
+  }
+
   if (!pool) {
-    // Azure SQL Serverless auto-pauses; first connect attempt wakes it but times out (~15s).
-    // Retry once after 25s — the DB should be ready by then.
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      pool = new sql.ConnectionPool(process.env.AZURE_SQL_CONNECTION_STRING);
-      pool.on('error', () => { pool = null; initialized = false; });
-      try {
-        await pool.connect();
-        break;
-      } catch (err) {
-        pool = null;
-        if (attempt === 2) throw err;
-        await new Promise(r => setTimeout(r, 25000));
-      }
+    pool = new sql.ConnectionPool(process.env.AZURE_SQL_CONNECTION_STRING);
+    pool.on('error', () => { pool = null; initialized = false; });
+    try {
+      await pool.connect();
+    } catch (err) {
+      try { pool.close(); } catch {}
+      pool = null;
+      throw err;
     }
   }
+
   if (!initialized) {
     await initSchema();
     initialized = true;
