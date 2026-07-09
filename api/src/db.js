@@ -5,12 +5,20 @@ let initialized = false;
 
 async function getPool() {
   if (!pool) {
-    pool = new sql.ConnectionPool(process.env.AZURE_SQL_CONNECTION_STRING);
-    pool.on('error', () => {
-      pool = null;
-      initialized = false;
-    });
-    await pool.connect();
+    // Azure SQL Serverless auto-pauses; first connect attempt wakes it but times out (~15s).
+    // Retry once after 25s — the DB should be ready by then.
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      pool = new sql.ConnectionPool(process.env.AZURE_SQL_CONNECTION_STRING);
+      pool.on('error', () => { pool = null; initialized = false; });
+      try {
+        await pool.connect();
+        break;
+      } catch (err) {
+        pool = null;
+        if (attempt === 2) throw err;
+        await new Promise(r => setTimeout(r, 25000));
+      }
+    }
   }
   if (!initialized) {
     await initSchema();

@@ -121,7 +121,7 @@
       document.getElementById('last-updated').textContent =
         'Updated ' + new Date().toLocaleTimeString();
     } catch (err) {
-      document.getElementById('last-updated').textContent = 'Error loading data';
+      document.getElementById('last-updated').textContent = 'Database waking up — retrying in 30s…';
       console.error(err);
     }
   }
