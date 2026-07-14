@@ -413,12 +413,28 @@
     }
   }
 
-  refreshDbStatus();
   setInterval(refreshDbStatus, 30000);
   // ────────────────────────────────────────────────────────────────────────
 
-  initTabs().then(() => loadDashboard());
-  startDashboardPolling();
+  // On page load: check server paused flag BEFORE making any SQL calls.
+  // /api/dbstatus uses the Azure Management API only (no SQL connection).
+  async function init() {
+    try {
+      const s = await api.get('/api/dbstatus');
+      _dbPaused = !!s.blocked;
+    } catch {}
+
+    if (_dbPaused) {
+      setDbBadge('Sleeping', 'paused');
+    } else {
+      refreshDbStatus();
+      await initTabs();
+      loadDashboard();
+      startDashboardPolling();
+    }
+  }
+
+  init();
 </script>
 </body>
 </html>
