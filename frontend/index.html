@@ -358,6 +358,17 @@
   }
 
   // ── DB pause/resume controls (DEV only) ─────────────────────────────────
+  let dashboardTimer = null;
+
+  function startDashboardPolling() {
+    if (dashboardTimer) clearInterval(dashboardTimer);
+    dashboardTimer = setInterval(loadDashboard, 30000);
+  }
+
+  function stopDashboardPolling() {
+    if (dashboardTimer) { clearInterval(dashboardTimer); dashboardTimer = null; }
+  }
+
   async function refreshDbStatus() {
     const badge = document.getElementById('db-status-badge');
     try {
@@ -380,6 +391,12 @@
     pauseBtn.disabled = resumeBtn.disabled = true;
     try {
       await api.post('/api/db' + action, {});
+      if (action === 'pause') {
+        stopDashboardPolling();   // stop dashboard from waking the DB back up
+      } else {
+        startDashboardPolling();  // resume normal polling
+        setTimeout(loadDashboard, 2000);
+      }
       setTimeout(refreshDbStatus, 4000);
     } catch {
       badge.textContent = 'Error';
@@ -394,7 +411,7 @@
   // ────────────────────────────────────────────────────────────────────────
 
   initTabs().then(() => loadDashboard());
-  setInterval(loadDashboard, 30000);
+  startDashboardPolling();
 </script>
 </body>
 </html>
