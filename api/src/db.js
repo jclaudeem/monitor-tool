@@ -36,6 +36,18 @@ async function initSchema() {
   const p = pool;
 
   await p.request().query(`
+    IF OBJECT_ID('clients', 'U') IS NULL
+    CREATE TABLE clients (
+      id            INT IDENTITY(1,1) PRIMARY KEY,
+      name          NVARCHAR(100)  NOT NULL,
+      contact_name  NVARCHAR(100),
+      contact_email NVARCHAR(150),
+      contact_phone NVARCHAR(30),
+      created_at    DATETIME2 DEFAULT GETUTCDATE()
+    )
+  `);
+
+  await p.request().query(`
     IF OBJECT_ID('agents', 'U') IS NULL
     CREATE TABLE agents (
       id         INT IDENTITY(1,1) PRIMARY KEY,
@@ -46,6 +58,11 @@ async function initSchema() {
       created_at DATETIME2 DEFAULT GETUTCDATE(),
       CONSTRAINT UQ_agents_key UNIQUE (api_key)
     )
+  `);
+
+  await p.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('agents') AND name='client_id')
+      ALTER TABLE agents ADD client_id INT NULL REFERENCES clients(id)
   `);
 
   await p.request().query(`

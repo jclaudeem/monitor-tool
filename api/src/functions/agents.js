@@ -26,10 +26,14 @@ app.http('listAgents', {
     try {
       const pool = await getPool();
       const result = await pool.request().query(`
-        SELECT a.*, COUNT(d.id) AS device_count
+        SELECT a.id, a.name, a.location, a.api_key, a.last_seen, a.created_at,
+               a.client_id, c.name AS client_name,
+               COUNT(d.id) AS device_count
         FROM agents a
+        LEFT JOIN clients c ON c.id = a.client_id
         LEFT JOIN devices d ON d.agent_id = a.id
-        GROUP BY a.id, a.name, a.location, a.api_key, a.last_seen, a.created_at
+        GROUP BY a.id, a.name, a.location, a.api_key, a.last_seen, a.created_at,
+                 a.client_id, c.name
         ORDER BY a.name
       `);
       return { jsonBody: result.recordset };
@@ -45,23 +49,51 @@ app.http('createAgent', {
   authLevel: 'anonymous',
   route: 'agents',
   handler: async (req, ctx) => {
-    const { name, location } = await req.json();
+    const { name, location, client_id } = await req.json();
     if (!name) return { status: 400, jsonBody: { error: 'name is required' } };
     const apiKey = crypto.randomBytes(32).toString('hex');
     try {
       const pool = await getPool();
       const result = await pool.request()
-        .input('name',     sql.NVarChar(255), name.trim())
-        .input('location', sql.NVarChar(255), location?.trim() || null)
-        .input('key',      sql.NVarChar(64),  apiKey)
+        .input('name',      sql.NVarChar(255), name.trim())
+        .input('location',  sql.NVarChar(255), location?.trim() || null)
+        .input('client_id', sql.Int,           client_id || null)
+        .input('key',       sql.NVarChar(64),  apiKey)
         .query(`
-          INSERT INTO agents (name, location, api_key)
+          INSERT INTO agents (name, location, client_id, api_key)
           OUTPUT INSERTED.id
-          VALUES (@name, @location, @key)
+          VALUES (@name, @location, @client_id, @key)
         `);
       return { status: 201, jsonBody: { id: result.recordset[0].id, api_key: apiKey } };
     } catch (err) {
       ctx.error('createAgent:', err.message);
+      return { status: 500, jsonBody: { error: 'Database error' } };
+    }
+  }
+});
+
+app.http('updateAgent', {
+  methods: ['PUT'],
+  authLevel: 'anonymous',
+  route: 'agents/{id}',
+  handler: async (req, ctx) => {
+    const { name, location, client_id } = await req.json();
+    if (!name?.trim()) return { status: 400, jsonBody: { error: 'name is required' } };
+    try {
+      const pool = await getPool();
+      const result = await pool.request()
+        .input('id',        sql.Int,           parseInt(req.params.id))
+        .input('name',      sql.NVarChar(255), name.trim())
+        .input('location',  sql.NVarChar(255), location?.trim() || null)
+        .input('client_id', sql.Int,           client_id || null)
+        .query(`
+          UPDATE agents SET name=@name, location=@location, client_id=@client_id
+          WHERE id=@id
+        `);
+      if (result.rowsAffected[0] === 0) return { status: 404, jsonBody: { error: 'Agent not found' } };
+      return { jsonBody: { ok: true } };
+    } catch (err) {
+      ctx.error('updateAgent:', err.message);
       return { status: 500, jsonBody: { error: 'Database error' } };
     }
   }

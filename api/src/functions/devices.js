@@ -8,22 +8,27 @@ app.http('listDevices', {
   handler: async (req, ctx) => {
     try {
       const pool = await getPool();
-      const result = await pool.request().query(`
-        SELECT
-          d.*,
-          a.name           AS agent_name,
-          pr.status        AS last_status,
-          pr.response_time AS last_response_time,
-          pr.polled_at     AS last_polled_at
-        FROM devices d
-        LEFT JOIN agents a ON a.id = d.agent_id
-        LEFT JOIN poll_results pr ON pr.id = (
-          SELECT TOP 1 id FROM poll_results
-          WHERE device_id = d.id
-          ORDER BY polled_at DESC
-        )
-        ORDER BY d.name
-      `);
+      const clientId = parseInt(new URL(req.url).searchParams.get('clientId') || '0') || null;
+      const result = await pool.request()
+        .input('clientId', sql.Int, clientId)
+        .query(`
+          SELECT
+            d.*,
+            a.name           AS agent_name,
+            a.client_id      AS client_id,
+            pr.status        AS last_status,
+            pr.response_time AS last_response_time,
+            pr.polled_at     AS last_polled_at
+          FROM devices d
+          LEFT JOIN agents a ON a.id = d.agent_id
+          LEFT JOIN poll_results pr ON pr.id = (
+            SELECT TOP 1 id FROM poll_results
+            WHERE device_id = d.id
+            ORDER BY polled_at DESC
+          )
+          WHERE (@clientId IS NULL OR a.client_id = @clientId)
+          ORDER BY d.name
+        `);
       return { jsonBody: result.recordset };
     } catch (err) {
       ctx.error('listDevices:', err.message);

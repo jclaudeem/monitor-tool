@@ -20,6 +20,9 @@
     <a href="index.html" class="nav-link active">
       <i class="fa-solid fa-gauge"></i> Dashboard
     </a>
+    <a href="clients.html" class="nav-link">
+      <i class="fa-solid fa-building"></i> Clients
+    </a>
     <a href="devices.html" class="nav-link">
       <i class="fa-solid fa-server"></i> Devices
     </a>
@@ -40,6 +43,9 @@
       </button>
     </div>
   </header>
+
+  <!-- Client tabs -->
+  <div class="client-tabs" id="client-tabs"></div>
 
   <!-- DEV: remove when upgrading to SQL Basic tier -->
   <div class="dev-banner">
@@ -119,6 +125,35 @@
 </div>
 
 <style>
+  .client-tabs {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 0;
+  }
+  .client-tab {
+    padding: 7px 16px;
+    border-radius: 6px 6px 0 0;
+    border: 1px solid transparent;
+    border-bottom: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    margin-bottom: -2px;
+    transition: background .15s, color .15s;
+  }
+  .client-tab:hover { background: var(--hover-bg); color: var(--text-primary); }
+  .client-tab.active {
+    background: var(--card-bg);
+    color: var(--primary);
+    border-color: var(--border);
+    border-bottom-color: var(--card-bg);
+    font-weight: 600;
+  }
   .dev-banner {
     display: flex;
     align-items: center;
@@ -150,6 +185,9 @@
 </style>
 <script src="assets/app.js"></script>
 <script>
+  let activeClientId = null;
+  let allClients = [];
+
   function agentStatusClass(lastSeen) {
     if (!lastSeen) return 'never';
     const diffMin = (Date.now() - new Date(lastSeen + (lastSeen.endsWith('Z') ? '' : 'Z'))) / 60000;
@@ -158,11 +196,48 @@
     return 'offline';
   }
 
+  async function initTabs() {
+    try {
+      allClients = await api.get('/api/clients');
+    } catch {
+      allClients = [];
+    }
+    // Check URL param for initial tab
+    const urlClient = parseInt(new URLSearchParams(location.search).get('clientId') || '0') || null;
+    activeClientId = urlClient;
+    renderTabs();
+  }
+
+  function renderTabs() {
+    const bar = document.getElementById('client-tabs');
+    const allTab = `<button class="client-tab${activeClientId === null ? ' active' : ''}" onclick="selectTab(null)">
+      <i class="fa-solid fa-layer-group" style="margin-right:5px"></i>All Clients
+    </button>`;
+    const clientTabs = allClients.map(c =>
+      `<button class="client-tab${activeClientId === c.id ? ' active' : ''}" onclick="selectTab(${c.id})">
+        ${escHtml(c.name)}
+      </button>`
+    ).join('');
+    bar.innerHTML = allTab + clientTabs;
+  }
+
+  function selectTab(clientId) {
+    activeClientId = clientId;
+    renderTabs();
+    loadDashboard();
+    // Update URL without reload
+    const url = new URL(location.href);
+    if (clientId) url.searchParams.set('clientId', clientId);
+    else url.searchParams.delete('clientId');
+    history.replaceState(null, '', url);
+  }
+
   async function loadDashboard() {
     try {
+      const qs = activeClientId ? `?clientId=${activeClientId}` : '';
       const [summary, devices, agents] = await Promise.all([
-        api.get('/api/status/summary'),
-        api.get('/api/devices'),
+        api.get('/api/status/summary' + qs),
+        api.get('/api/devices' + qs),
         api.get('/api/agents'),
       ]);
       renderSummary(summary);
@@ -318,7 +393,7 @@
   setInterval(refreshDbStatus, 30000);
   // ────────────────────────────────────────────────────────────────────────
 
-  loadDashboard();
+  initTabs().then(() => loadDashboard());
   setInterval(loadDashboard, 30000);
 </script>
 </body>
