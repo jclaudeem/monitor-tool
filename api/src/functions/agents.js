@@ -1,5 +1,5 @@
 const { app } = require('@azure/functions');
-const { getPool, sql } = require('../db');
+const { getPool, sql, isPaused } = require('../db');
 const crypto = require('crypto');
 
 async function resolveAgent(req) {
@@ -131,6 +131,7 @@ app.http('getAgentDevices', {
   authLevel: 'anonymous',
   route: 'agentdevices',
   handler: async (req, ctx) => {
+    if (isPaused()) return { status: 503, jsonBody: { paused: true } };
     let agent;
     try { agent = await resolveAgent(req); } catch (err) {
       ctx.error('resolveAgent (getAgentDevices):', err.message);
@@ -158,6 +159,7 @@ app.http('agentReport', {
   authLevel: 'anonymous',
   route: 'agentreport',
   handler: async (req, ctx) => {
+    if (isPaused()) return { status: 503, jsonBody: { paused: true } };
     let agent;
     try { agent = await resolveAgent(req); } catch (err) {
       ctx.error('resolveAgent (agentReport):', err.message);

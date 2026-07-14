@@ -1,4 +1,5 @@
 const { app } = require('@azure/functions');
+const { setPaused } = require('../db');
 
 const TENANT_ID = process.env.AZURE_TENANT_ID;
 const CLIENT_ID = process.env.AZURE_CLIENT_ID;
@@ -59,6 +60,7 @@ app.http('dbPause', {
         headers: { Authorization: `Bearer ${token}`, 'Content-Length': '0' }
       });
       if (resp.status === 200 || resp.status === 202) {
+        setPaused(true);
         return { status: 200, jsonBody: { ok: true } };
       }
       const body = await resp.text();
@@ -82,6 +84,7 @@ app.http('dbResume', {
         headers: { Authorization: `Bearer ${token}`, 'Content-Length': '0' }
       });
       if (resp.status === 200 || resp.status === 202) {
+        setPaused(false);
         return { status: 200, jsonBody: { ok: true } };
       }
       const body = await resp.text();
