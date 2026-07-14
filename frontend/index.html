@@ -41,6 +41,26 @@
     </div>
   </header>
 
+  <!-- DEV: remove when upgrading to SQL Basic tier -->
+  <div class="dev-banner">
+    <span style="display:flex;align-items:center;gap:8px">
+      <i class="fa-solid fa-database" style="color:#2980b9"></i>
+      <strong>Database:</strong>
+      <span id="db-status-badge" class="db-badge loading">…</span>
+    </span>
+    <div style="display:flex;gap:6px;align-items:center">
+      <button class="btn btn-sm" id="btn-db-pause" onclick="dbAction('pause')">
+        <i class="fa-solid fa-pause"></i> Pause
+      </button>
+      <button class="btn btn-sm btn-success" id="btn-db-resume" onclick="dbAction('resume')">
+        <i class="fa-solid fa-play"></i> Resume
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="refreshDbStatus()" title="Refresh status">
+        <i class="fa-solid fa-arrows-rotate"></i>
+      </button>
+    </div>
+  </div>
+
   <div class="content">
     <!-- Summary cards -->
     <div class="summary-grid">
@@ -98,6 +118,36 @@
   </div>
 </div>
 
+<style>
+  .dev-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(243,156,18,0.08);
+    border: 1px solid rgba(243,156,18,0.3);
+    border-radius: 8px;
+    padding: 10px 16px;
+    margin: 0 0 16px 0;
+    font-size: 14px;
+  }
+  .db-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+  .db-badge.loading    { background: rgba(150,150,150,.15); color: var(--text-secondary); }
+  .db-badge.online     { background: rgba(0,184,148,.15);   color: #00b894; }
+  .db-badge.paused     { background: rgba(214,48,49,.12);   color: var(--down); }
+  .db-badge.pausing    { background: rgba(214,48,49,.08);   color: var(--down); }
+  .db-badge.resuming   { background: rgba(41,128,185,.12);  color: #2980b9; }
+  .db-badge.error      { background: rgba(214,48,49,.12);   color: var(--down); }
+  .btn-success { background: rgba(0,184,148,.15); color: #00b894; border: 1px solid rgba(0,184,148,.3); }
+  .btn-success:hover { background: rgba(0,184,148,.25); }
+</style>
 <script src="assets/app.js"></script>
 <script>
   function agentStatusClass(lastSeen) {
@@ -231,6 +281,42 @@
     if (!str) return '';
     return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
+
+  // ── DB pause/resume controls (DEV only) ─────────────────────────────────
+  async function refreshDbStatus() {
+    const badge = document.getElementById('db-status-badge');
+    try {
+      const data = await api.get('/api/dbstatus');
+      const s = (data.status || 'Unknown').toLowerCase();
+      badge.textContent = data.status;
+      badge.className = 'db-badge ' + (s === 'online' ? 'online' : s.startsWith('paus') ? 'paused' : s.startsWith('resum') ? 'resuming' : 'loading');
+    } catch {
+      badge.textContent = 'Error';
+      badge.className = 'db-badge error';
+    }
+  }
+
+  async function dbAction(action) {
+    const badge = document.getElementById('db-status-badge');
+    const pauseBtn  = document.getElementById('btn-db-pause');
+    const resumeBtn = document.getElementById('btn-db-resume');
+    badge.textContent = action === 'pause' ? 'Pausing…' : 'Resuming…';
+    badge.className   = 'db-badge ' + (action === 'pause' ? 'pausing' : 'resuming');
+    pauseBtn.disabled = resumeBtn.disabled = true;
+    try {
+      await api.post('/api/db' + action, {});
+      setTimeout(refreshDbStatus, 4000);
+    } catch {
+      badge.textContent = 'Error';
+      badge.className = 'db-badge error';
+    } finally {
+      pauseBtn.disabled = resumeBtn.disabled = false;
+    }
+  }
+
+  refreshDbStatus();
+  setInterval(refreshDbStatus, 30000);
+  // ────────────────────────────────────────────────────────────────────────
 
   loadDashboard();
   setInterval(loadDashboard, 30000);
