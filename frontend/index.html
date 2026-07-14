@@ -180,6 +180,7 @@
   .db-badge.pausing    { background: rgba(214,48,49,.08);   color: var(--down); }
   .db-badge.resuming   { background: rgba(41,128,185,.12);  color: #2980b9; }
   .db-badge.error      { background: rgba(214,48,49,.12);   color: var(--down); }
+  .db-badge.sleeping   { background: rgba(214,48,49,.12);   color: var(--down); }
   .btn-success { background: rgba(0,184,148,.15); color: #00b894; border: 1px solid rgba(0,184,148,.3); }
   .btn-success:hover { background: rgba(0,184,148,.25); }
 </style>
@@ -369,38 +370,44 @@
     if (dashboardTimer) { clearInterval(dashboardTimer); dashboardTimer = null; }
   }
 
-  async function refreshDbStatus() {
+  let _dbPaused = false;
+
+  function setDbBadge(text, cls) {
     const badge = document.getElementById('db-status-badge');
+    badge.textContent = text;
+    badge.className = 'db-badge ' + cls;
+  }
+
+  async function refreshDbStatus() {
+    if (_dbPaused) { setDbBadge('Sleeping', 'paused'); return; }
     try {
       const data = await api.get('/api/dbstatus');
       const s = (data.status || 'Unknown').toLowerCase();
-      badge.textContent = data.status;
-      badge.className = 'db-badge ' + (s === 'online' ? 'online' : s.startsWith('paus') ? 'paused' : s.startsWith('resum') ? 'resuming' : 'loading');
+      setDbBadge(data.status, s === 'online' ? 'online' : s.startsWith('paus') ? 'paused' : s.startsWith('resum') ? 'resuming' : 'loading');
     } catch {
-      badge.textContent = 'Error';
-      badge.className = 'db-badge error';
+      setDbBadge('Unknown', 'loading');
     }
   }
 
   async function dbAction(action) {
-    const badge = document.getElementById('db-status-badge');
     const pauseBtn  = document.getElementById('btn-db-pause');
     const resumeBtn = document.getElementById('btn-db-resume');
-    badge.textContent = action === 'pause' ? 'Pausing…' : 'Resuming…';
-    badge.className   = 'db-badge ' + (action === 'pause' ? 'pausing' : 'resuming');
     pauseBtn.disabled = resumeBtn.disabled = true;
+    setDbBadge(action === 'pause' ? 'Pausing…' : 'Waking up…', action === 'pause' ? 'pausing' : 'resuming');
     try {
       await api.post('/api/db' + action, {});
-      if (action === 'pause') {
-        stopDashboardPolling();   // stop dashboard from waking the DB back up
+      _dbPaused = (action === 'pause');
+      if (_dbPaused) {
+        stopDashboardPolling();
+        setDbBadge('Sleeping', 'paused');
       } else {
-        startDashboardPolling();  // resume normal polling
-        setTimeout(loadDashboard, 2000);
+        setDbBadge('Waking up…', 'resuming');
+        startDashboardPolling();
+        setTimeout(loadDashboard, 5000);   // give DB ~40s to resume; first load may fail
+        setTimeout(refreshDbStatus, 10000);
       }
-      setTimeout(refreshDbStatus, 4000);
-    } catch {
-      badge.textContent = 'Error';
-      badge.className = 'db-badge error';
+    } catch (err) {
+      setDbBadge('Error', 'error');
     } finally {
       pauseBtn.disabled = resumeBtn.disabled = false;
     }

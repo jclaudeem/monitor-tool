@@ -1,14 +1,12 @@
 const { app } = require('@azure/functions');
-const { setPaused } = require('../db');
+const { setPaused, isPaused } = require('../db');
 
-const TENANT_ID = process.env.AZURE_TENANT_ID;
-const CLIENT_ID = process.env.AZURE_CLIENT_ID;
-const CLIENT_SECRET = process.env.AZURE_CLIENT_SECRET;
+const TENANT_ID       = process.env.AZURE_TENANT_ID;
+const CLIENT_ID       = process.env.AZURE_CLIENT_ID;
+const CLIENT_SECRET   = process.env.AZURE_CLIENT_SECRET;
 const SUBSCRIPTION_ID = process.env.AZURE_SUBSCRIPTION_ID;
 
 const DB_PATH = `subscriptions/${SUBSCRIPTION_ID}/resourceGroups/monitor-tool-rg/providers/Microsoft.Sql/servers/mt-sql-scus/databases/monitor-tool`;
-const MGMT = 'https://management.azure.com';
-const API_VER = '2021-11-01';
 
 async function getToken() {
   const resp = await fetch(
@@ -29,6 +27,7 @@ async function getToken() {
   return data.access_token;
 }
 
+// GET /api/dbstatus — reads real DB state from Azure Management API
 app.http('dbStatus', {
   methods: ['GET'],
   authLevel: 'anonymous',
@@ -36,11 +35,14 @@ app.http('dbStatus', {
   handler: async (req, ctx) => {
     try {
       const token = await getToken();
-      const resp = await fetch(`${MGMT}/${DB_PATH}?api-version=${API_VER}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const resp = await fetch(
+        `https://management.azure.com/${DB_PATH}?api-version=2021-11-01`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
       const data = await resp.json();
-      return { status: 200, jsonBody: { status: data.properties?.status ?? 'Unknown' } };
+      const azureStatus = data.properties?.status ?? 'Unknown';
+      // If the flag is set, surface that so the UI knows connections are blocked
+      return { status: 200, jsonBody: { status: azureStatus, blocked: isPaused() } };
     } catch (err) {
       ctx.error('dbstatus:', err);
       return { status: 500, jsonBody: { error: err.message } };
@@ -48,50 +50,24 @@ app.http('dbStatus', {
   }
 });
 
+// POST /api/dbpause — sets the in-process flag; DB auto-sleeps within 60 min of no connections
 app.http('dbPause', {
   methods: ['POST'],
   authLevel: 'anonymous',
   route: 'dbpause',
   handler: async (req, ctx) => {
-    try {
-      const token = await getToken();
-      const resp = await fetch(`${MGMT}/${DB_PATH}/pause?api-version=${API_VER}`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Length': '0' }
-      });
-      if (resp.status === 200 || resp.status === 202) {
-        setPaused(true);
-        return { status: 200, jsonBody: { ok: true } };
-      }
-      const body = await resp.text();
-      return { status: 500, jsonBody: { error: body } };
-    } catch (err) {
-      ctx.error('dbpause:', err);
-      return { status: 500, jsonBody: { error: err.message } };
-    }
+    setPaused(true);
+    return { status: 200, jsonBody: { ok: true } };
   }
 });
 
+// POST /api/dbresume — clears the flag; next dashboard load triggers Azure auto-resume
 app.http('dbResume', {
   methods: ['POST'],
   authLevel: 'anonymous',
   route: 'dbresume',
   handler: async (req, ctx) => {
-    try {
-      const token = await getToken();
-      const resp = await fetch(`${MGMT}/${DB_PATH}/resume?api-version=${API_VER}`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Length': '0' }
-      });
-      if (resp.status === 200 || resp.status === 202) {
-        setPaused(false);
-        return { status: 200, jsonBody: { ok: true } };
-      }
-      const body = await resp.text();
-      return { status: 500, jsonBody: { error: body } };
-    } catch (err) {
-      ctx.error('dbresume:', err);
-      return { status: 500, jsonBody: { error: err.message } };
-    }
+    setPaused(false);
+    return { status: 200, jsonBody: { ok: true } };
   }
 });
