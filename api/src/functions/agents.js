@@ -1,5 +1,5 @@
 const { app } = require('@azure/functions');
-const { getPool, sql, isPaused } = require('../db');
+const { getPool, sql, isPaused, syncPausedOnColdStart } = require('../db');
 const crypto = require('crypto');
 
 async function resolveAgent(req) {
@@ -131,6 +131,7 @@ app.http('getAgentDevices', {
   authLevel: 'anonymous',
   route: 'agentdevices',
   handler: async (req, ctx) => {
+    await syncPausedOnColdStart();
     if (isPaused()) return { status: 503, jsonBody: { paused: true } };
     let agent;
     try { agent = await resolveAgent(req); } catch (err) {
@@ -159,6 +160,7 @@ app.http('agentReport', {
   authLevel: 'anonymous',
   route: 'agentreport',
   handler: async (req, ctx) => {
+    await syncPausedOnColdStart();
     if (isPaused()) return { status: 503, jsonBody: { paused: true } };
     let agent;
     try { agent = await resolveAgent(req); } catch (err) {

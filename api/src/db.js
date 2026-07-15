@@ -3,9 +3,23 @@ const sql = require('mssql');
 let pool = null;
 let initialized = false;
 let paused = false;
+let coldStartChecked = false;
 
 function setPaused(val) { paused = !!val; }
 function isPaused()     { return paused; }
+
+// On first call after a cold start, check the real Azure DB status.
+// If Azure says Paused, set the in-memory flag so agent endpoints return 503
+// without attempting a SQL connection that would trigger an unwanted auto-resume.
+async function syncPausedOnColdStart() {
+  if (coldStartChecked) return;
+  coldStartChecked = true;
+  try {
+    const { getDbStatus } = require('./azure');
+    const status = await getDbStatus();
+    if (status === 'Paused' || status === 'Pausing') paused = true;
+  } catch { /* non-fatal — proceed without pausing if Management API fails */ }
+}
 
 async function getPool() {
   // If pool exists but is not connected (e.g. timed out mid-connect on a previous request),
@@ -140,4 +154,4 @@ async function initSchema() {
   `);
 }
 
-module.exports = { getPool, sql, setPaused, isPaused };
+module.exports = { getPool, sql, setPaused, isPaused, syncPausedOnColdStart };

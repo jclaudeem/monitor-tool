@@ -1,5 +1,5 @@
 const { app } = require('@azure/functions');
-const { getPool, sql, isPaused } = require('../db');
+const { getPool, sql, isPaused, syncPausedOnColdStart } = require('../db');
 
 function resolveAgent(req) {
   const getHeader = (name) => typeof req.headers.get === 'function'
@@ -23,6 +23,7 @@ app.http('agentSnmp', {
   authLevel: 'anonymous',
   route: 'agentsnmp',
   handler: async (req, ctx) => {
+    await syncPausedOnColdStart();
     if (isPaused()) return { status: 503, jsonBody: { paused: true } };
     let agent;
     try { agent = await getAgent(req); } catch (err) {
