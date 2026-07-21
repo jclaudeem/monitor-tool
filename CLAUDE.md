@@ -4,84 +4,90 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Monitor Tool** — a self-hosted network and server monitoring dashboard (simplified SolarWinds-style). It monitors devices via ICMP ping, supports private-network agents that push results to a central server, and is deployed to **Azure Static Web Apps** with **Azure SQL Database** as the backend.
+**Monitor Tool** — a SolarWinds-style network monitoring dashboard. Agents run inside private networks, poll devices via ICMP ping and SNMP v2c, and report to a central Azure-hosted backend.
 
-- GitHub: `github.com/jclaudeem/monitor-tool`
-- Azure account: `irondss.com` tenant (`917f3df2-d42e-4157-8e3e-73948d596e69`)
-- Resource group: `monitor-tool-rg` (East US 2)
-- Deployment: push to `master` → Azure SWA auto-deploys via GitHub Actions
+- **Live URL:** `https://proud-mud-06d03420f.7.azurestaticapps.net`
+- **Repo:** `github.com/jclaudeem/monitor-tool` (branch: `master`)
+- **Azure account:** `irondss.com` tenant, subscription `9389a990-c7c7-44fb-8d69-866ce7fcc3cc`, resource group `monitor-tool-rg`
+
+## Deployment
+
+Push to `master` triggers auto-deploy via GitHub Actions (~1–2 min). SWA build settings: `app_location: "frontend"`, `api_location: "api"`, `output_location: ""` (empty — Oryx can't detect a build platform for plain HTML; pointing directly at `frontend/` is the fix).
+
+## Build — Agent Executable
+
+```powershell
+cd agent
+npm install
+npm run build   # → agent/dist/MonitorAgent.exe (~44 MB, standalone, no Node.js needed)
+```
+
+Uses `@yao-pkg/pkg` targeting `node20-win-x64`. The exe must not be running when rebuilding (file lock). The deployed agent lives at `C:\Users\server\Desktop\dist\MonitorAgent.exe` on `192.168.168.50`.
 
 ## Architecture
 
 ```
-monitor-tool/
-├── frontend/          Static HTML/CSS/JS dashboard (no build step)
-├── api/               Azure Functions v4 (Node.js) — served at /api/*
-│   └── src/
-│       ├── db.js      Azure SQL connection pool + schema auto-init on cold start
-│       └── functions/ One file per resource group (devices, agents, status, cleanup)
-├── agent/             Standalone Node.js process deployed inside private networks
-└── staticwebapp.config.json
+frontend/            Static HTML dashboard (no build step, inline CSS per page)
+  assets/
+    style.css        Shared layout + CSS variables (--primary #2980b9, --up #00b894, --down #d63031)
+    app.js           Shared fetch helpers (api.get/post/put/del), timeAgo(), showToast()
+  index.html         Dashboard — stat cards + device status table + agent list
+  devices.html       Device CRUD, SNMP detail modal, history charts (Chart.js 4 + date-fns adapter)
+  agents.html        Agent management
+
+api/src/
+  db.js              mssql connection pool singleton; schema auto-creates on cold start
+  functions/
+    agents.js        Agent CRUD (dashboard) + agent-facing poll endpoints
+    devices.js       Device CRUD
+    snmp.js          Agent posts SNMP results; dashboard reads latest SNMP data
+    history.js       GET devicehistory/{id}?hours=N — ping + SNMP time-series for charts
+    status.js        GET status/summary — stat card counts; GET status/history/{deviceId}
+    cleanup.js       Scheduled pruning
+
+agent/
+  agent.js           Main loop: fetchDevices → ping all → report → SNMP poll → report (60s)
+  snmp.js            SNMP v2c via net-snmp: subtree walks for ifTable, hrProcessorTable, hrStorageTable
+  dist/              MonitorAgent.exe lives here
 ```
 
-### How it fits together
+## Critical SWA Gotchas
 
-- **Frontend** calls `/api/*` endpoints. In Azure SWA, these are automatically routed to the Azure Functions in `api/`. Locally there is no dev server — the app requires a running backend.
-- **`api/src/db.js`** manages a module-level `mssql` connection pool. Schema is created automatically (`IF OBJECT_ID ... IS NULL`) on the first cold start — no migration tool needed.
-- **Agents** run `npm start` inside `agent/` on any machine in a private network. Each cycle they: (1) `GET /api/agents/devices` to fetch their assigned devices, (2) ICMP-ping them locally, (3) `POST /api/agents/report` with results. Auth is a 64-char hex bearer token stored in `agent/config.json`.
-- **The Azure Functions poller does not ping devices** — Azure cannot reach private IPs. All polling is agent-driven. The only timer trigger (`cleanup.js`) prunes `poll_results` older than 24 hours at 03:00 UTC.
+**1. Authorization header is intercepted.** SWA replaces any `Authorization: Bearer` header with its own JWT before functions see it. The agent authenticates via `X-Agent-Key` header instead. `resolveAgent()` in `agents.js` reads `x-agent-key`.
 
-### Data flow
+**2. Nested API routes conflict.** A route like `agents/devices` matches the `agents/{id}` parameter route at the SWA edge layer before the function handler runs. Use flat single-segment routes: `agentdevices`, `agentreport`, `agentsnmp`, `devicehistory/{id}`.
 
-```
-Agent (private net) → ICMP ping → POST /api/agents/report → Azure SQL poll_results
-Dashboard           → GET /api/devices + /api/status/summary → Azure SQL
-```
+**3. Stale pool after timeout.** If the DB is auto-paused and a function times out mid-connect, `pool` is set but `pool.connected` is false. `db.js` checks `pool.connected` before reusing — if falsy, closes and recreates it cleanly.
+
+**4. Free tier function timeout (~30s) vs. Azure SQL cold-start (~35–40s).** The first request after auto-pause always fails. The second agent cycle (60s later) succeeds because the DB finished resuming. This is expected behavior.
+
+## Azure SQL
+
+**Server:** `mt-sql-scus.database.windows.net` (South Central US)  
+**Database:** `monitor-tool` — free Serverless Gen5, auto-pauses after 60 min idle
+
+Connection string stored in SWA app settings as `AZURE_SQL_CONNECTION_STRING` (Connection Timeout=60).
+
+**Free tier limit:** 100,000 vCore-seconds/month (~55 hours at 0.5 vCore min). The agent polling every 60s keeps the DB permanently awake and exhausts credits in ~2.3 days of 24/7 operation. When exhausted, `freeLimitExhaustionBehavior` = `AutoPause` and the DB cannot auto-resume until credits reset or the tier is changed. Check status: `az sql db show --resource-group monitor-tool-rg --server mt-sql-scus --name monitor-tool --query "{status:status,exhausted:freeLimitExhaustionBehavior}"`.
+
+## Agent
+
+On first run the agent prompts for **Server URL** (base URL only, no trailing slash or path) and **API Key** (from dashboard → Agents). Config saved as `config.json` next to the exe. Delete `config.json` to re-run setup. Log: `MonitorAgent.log` next to the exe, rotates at 2000 lines.
+
+`MonitorAgent.exe --install` registers a Windows Task Scheduler startup task (requires Administrator).  
+`MonitorAgent.exe --uninstall` removes it.
 
 ## Database Schema
 
-Three tables in Azure SQL (T-SQL, auto-created):
+Auto-created by `db.js → initSchema()` using `IF OBJECT_ID ... IS NULL` guards:
 
-| Table | Key columns |
-|---|---|
-| `agents` | `id`, `name`, `api_key` (unique, 64-char hex), `last_seen` |
-| `devices` | `id`, `ip_address` (unique), `agent_id` FK → agents (NULL = no agent) |
-| `poll_results` | `device_id` FK → devices (CASCADE DELETE), `status` ('up'/'down'), `response_time` FLOAT ms, `polled_at` |
+| Table | Purpose | Pruning |
+|---|---|---|
+| `agents` | Registered agents; `api_key` is a 64-char hex unique key | — |
+| `devices` | Monitored devices; has `snmp_enabled`, `snmp_community`, `snmp_port` columns | — |
+| `poll_results` | Ping history: `status`, `response_time`, `polled_at` | 7 days, pruned on each `agentreport` cycle |
+| `snmp_results` | SNMP JSON blob per poll: `{system, interfaces, cpu[], memory[], errors[]}` | Last 100 per device |
 
-## Azure Functions
+## SNMP
 
-All functions use `authLevel: 'anonymous'`. Agent-facing endpoints (`GET /api/agents/devices`, `POST /api/agents/report`) authenticate via `Authorization: Bearer <api_key>` resolved in `resolveAgent()` in `agents.js`.
-
-SQL queries use named parameters (`@param`) and `OUTPUT INSERTED.id` for inserts. Check `result.rowsAffected[0] === 0` for not-found on UPDATE/DELETE. Unique constraint violations are SQL error numbers `2627` or `2601`.
-
-## Deployment
-
-**Azure Static Web Apps** — push to `master` triggers auto-deploy. Required environment variable set in Azure Portal → SWA → Configuration:
-
-```
-AZURE_SQL_CONNECTION_STRING=Server=tcp:<server>.database.windows.net,1433;Database=monitor-tool;User ID=monitoradmin;Password=...;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;
-```
-
-When connecting the GitHub repo to Azure SWA, use these build settings:
-- `app_location`: `/`
-- `api_location`: `api`
-- `output_location`: `frontend`
-
-## Agent Setup
-
-```bash
-cd agent
-cp config.example.json config.json   # fill in serverUrl + apiKey
-npm install
-node agent.js                         # or install as a Windows/Linux service
-```
-
-The agent's `serverUrl` must point to the live Azure SWA URL (e.g. `https://yourapp.azurestaticapps.net`). Devices are assigned to agents via the dashboard — the agent fetches its list dynamically on each cycle.
-
-## Frontend
-
-- No build step — raw HTML files served directly from `frontend/`
-- All CSS is in `frontend/assets/style.css` (CSS variables: `--primary`, `--up`, `--down`, `--unknown`)
-- Shared JS utilities in `frontend/assets/app.js`: `api.*` fetch wrappers, `timeAgo()`, `formatResponseTime()`, `statusBadgeHtml()`, `showToast()`
-- Dashboard auto-refreshes every 30 seconds via `setInterval`
-- ES pages: not applicable (English only)
+`agent/snmp.js` uses `session.subtree()` (not `tableColumns()`) for broad device compatibility. Results for each device: `system` (sysDescr/Uptime/Contact/Location), `interfaces[]` (ifTable), `cpu[]` (hrProcessorTable — servers only), `memory[]` (hrStorageTable — servers only). Network devices (routers, firewalls) return empty `cpu` and `memory` arrays — this is expected.
