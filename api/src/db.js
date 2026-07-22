@@ -134,6 +134,19 @@ async function initSchema() {
     )
     CREATE INDEX idx_snmp_device_time ON snmp_results(device_id, polled_at DESC)
   `);
+
+  await p.request().query(`
+    IF OBJECT_ID('users', 'U') IS NULL
+    CREATE TABLE users (
+      id            INT IDENTITY(1,1) PRIMARY KEY,
+      username      NVARCHAR(100) NOT NULL,
+      password_hash NVARCHAR(255) NOT NULL,
+      role          NVARCHAR(20)  NOT NULL DEFAULT 'viewer',
+      created_at    DATETIME2 DEFAULT GETUTCDATE(),
+      last_login    DATETIME2,
+      CONSTRAINT UQ_users_username UNIQUE (username)
+    )
+  `);
 }
 
 module.exports = { getPool, sql };

@@ -1,6 +1,7 @@
 const { app } = require('@azure/functions');
 const { getPool, sql } = require('../db');
 const crypto = require('crypto');
+const { requireAuth, requireAdmin } = require('../auth');
 
 async function resolveAgent(req) {
   // Use X-Agent-Key instead of Authorization — SWA intercepts Authorization headers
@@ -23,6 +24,7 @@ app.http('listAgents', {
   authLevel: 'anonymous',
   route: 'agents',
   handler: async (req, ctx) => {
+    const authErr = requireAuth(req); if (authErr) return authErr;
     try {
       const pool = await getPool();
       const result = await pool.request().query(`
@@ -49,6 +51,7 @@ app.http('createAgent', {
   authLevel: 'anonymous',
   route: 'agents',
   handler: async (req, ctx) => {
+    const authErr = requireAdmin(req); if (authErr) return authErr;
     const { name, location, client_id } = await req.json();
     if (!name) return { status: 400, jsonBody: { error: 'name is required' } };
     const apiKey = crypto.randomBytes(32).toString('hex');
@@ -77,6 +80,7 @@ app.http('updateAgent', {
   authLevel: 'anonymous',
   route: 'agents/{id}',
   handler: async (req, ctx) => {
+    const authErr = requireAdmin(req); if (authErr) return authErr;
     const { name, location, client_id } = await req.json();
     if (!name?.trim()) return { status: 400, jsonBody: { error: 'name is required' } };
     try {
@@ -104,6 +108,7 @@ app.http('deleteAgent', {
   authLevel: 'anonymous',
   route: 'agents/{id}',
   handler: async (req, ctx) => {
+    const authErr = requireAdmin(req); if (authErr) return authErr;
     const id = parseInt(req.params.id);
     try {
       const pool = await getPool();

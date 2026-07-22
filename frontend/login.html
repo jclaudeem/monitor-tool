@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monitor Tool — Login</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    :root {
+      --primary: #2980b9;
+      --primary-dark: #2471a3;
+      --down: #d63031;
+      --border: #e0e6ed;
+      --text-primary: #2d3436;
+      --text-secondary: #636e72;
+      --card-bg: #ffffff;
+      --content-bg: #f0f3f7;
+      --sidebar-bg: #1e3a5f;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--content-bg);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .login-wrap {
+      width: 100%;
+      max-width: 420px;
+      padding: 20px;
+    }
+    .brand {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .brand-icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 16px;
+      background: var(--sidebar-bg);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      color: #2980b9;
+      margin-bottom: 14px;
+    }
+    .brand h1 {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+    .brand p { font-size: 14px; color: var(--text-secondary); }
+    .card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 32px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    }
+    .card-title {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+    }
+    .card-subtitle {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 24px;
+    }
+    .form-group { margin-bottom: 18px; }
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 6px;
+      color: var(--text-primary);
+    }
+    .form-group input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+      color: var(--text-primary);
+      background: #fff;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .form-group input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(41,128,185,0.12);
+    }
+    .input-hint {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+    .btn-submit {
+      width: 100%;
+      padding: 11px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .btn-submit:hover:not(:disabled) { background: var(--primary-dark); }
+    .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+    .error-msg {
+      background: rgba(214,48,49,0.08);
+      border: 1px solid rgba(214,48,49,0.25);
+      color: #c0392b;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      margin-bottom: 18px;
+      display: none;
+    }
+    .error-msg.show { display: block; }
+    .setup-badge {
+      background: rgba(41,128,185,0.1);
+      border: 1px solid rgba(41,128,185,0.25);
+      color: var(--primary);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+  </style>
+</head>
+<body>
+<div class="login-wrap">
+  <div class="brand">
+    <div class="brand-icon"><i class="fa-solid fa-chart-network"></i></div>
+    <h1>Monitor Tool</h1>
+    <p>Network &amp; Server Monitor</p>
+  </div>
+
+  <div class="card">
+    <div id="error-box" class="error-msg"></div>
+
+    <!-- Login form -->
+    <div id="login-section">
+      <div class="card-title">Welcome back</div>
+      <div class="card-subtitle">Sign in to your account</div>
+      <form id="login-form">
+        <div class="form-group">
+          <label for="login-user">Username</label>
+          <input type="text" id="login-user" autocomplete="username" autocapitalize="none" required>
+        </div>
+        <div class="form-group">
+          <label for="login-pass">Password</label>
+          <input type="password" id="login-pass" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="btn-submit" id="login-btn">
+          <i class="fa-solid fa-right-to-bracket"></i> Sign In
+        </button>
+      </form>
+    </div>
+
+    <!-- First-run setup form -->
+    <div id="setup-section" style="display:none">
+      <div class="setup-badge">
+        <i class="fa-solid fa-circle-info"></i>
+        No accounts yet — create the first admin account to get started.
+      </div>
+      <div class="card-title">Create Admin Account</div>
+      <div class="card-subtitle">This account will have full access</div>
+      <form id="setup-form">
+        <div class="form-group">
+          <label for="setup-user">Username</label>
+          <input type="text" id="setup-user" autocomplete="username" autocapitalize="none" required>
+        </div>
+        <div class="form-group">
+          <label for="setup-pass">Password</label>
+          <input type="password" id="setup-pass" autocomplete="new-password" required>
+          <div class="input-hint">Minimum 8 characters</div>
+        </div>
+        <div class="form-group">
+          <label for="setup-pass2">Confirm Password</label>
+          <input type="password" id="setup-pass2" autocomplete="new-password" required>
+        </div>
+        <button type="submit" class="btn-submit" id="setup-btn">
+          <i class="fa-solid fa-user-plus"></i> Create Account &amp; Sign In
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  // If already logged in, skip to dashboard
+  if (localStorage.getItem('mt_token')) {
+    location.href = 'index.html';
+  }
+
+  async function checkSetup() {
+    try {
+      const r = await fetch('/api/setup');
+      const data = await r.json();
+      if (!data.configured) {
+        document.getElementById('login-section').style.display = 'none';
+        document.getElementById('setup-section').style.display = 'block';
+      }
+    } catch {}
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('error-box');
+    el.textContent = msg;
+    el.classList.add('show');
+  }
+  function clearError() {
+    document.getElementById('error-box').classList.remove('show');
+  }
+
+  function storeAuth(data) {
+    localStorage.setItem('mt_token', data.token);
+    localStorage.setItem('mt_user', JSON.stringify({ username: data.username, role: data.role }));
+  }
+
+  document.getElementById('login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearError();
+    const btn = document.getElementById('login-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Signing in…';
+    try {
+      const data = await (await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: document.getElementById('login-user').value.trim(),
+          password: document.getElementById('login-pass').value
+        })
+      })).json();
+      if (!data.token) { showError(data.error || 'Login failed'); return; }
+      storeAuth(data);
+      location.href = 'index.html';
+    } catch {
+      showError('Connection error — please try again');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> Sign In';
+    }
+  });
+
+  document.getElementById('setup-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearError();
+    const pass  = document.getElementById('setup-pass').value;
+    const pass2 = document.getElementById('setup-pass2').value;
+    if (pass !== pass2) { showError('Passwords do not match'); return; }
+    if (pass.length < 8) { showError('Password must be at least 8 characters'); return; }
+    const btn = document.getElementById('setup-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Creating account…';
+    try {
+      const data = await (await fetch('/api/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: document.getElementById('setup-user').value.trim(),
+          password: pass
+        })
+      })).json();
+      if (!data.token) { showError(data.error || 'Setup failed'); return; }
+      storeAuth(data);
+      location.href = 'index.html';
+    } catch {
+      showError('Connection error — please try again');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Create Account &amp; Sign In';
+    }
+  });
+
+  checkSetup();
+</script>
+</body>
+</html>

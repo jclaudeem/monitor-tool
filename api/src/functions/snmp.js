@@ -1,5 +1,6 @@
 const { app } = require('@azure/functions');
 const { getPool, sql } = require('../db');
+const { requireAuth } = require('../auth');
 
 function resolveAgent(req) {
   const getHeader = (name) => typeof req.headers.get === 'function'
@@ -82,6 +83,7 @@ app.http('getSnmp', {
   authLevel: 'anonymous',
   route: 'snmp/{deviceId}',
   handler: async (req, ctx) => {
+    const authErr = requireAuth(req); if (authErr) return authErr;
     const deviceId = parseInt(req.params.deviceId);
     const limit = Math.min(parseInt(new URL(req.url).searchParams.get('limit') || '1'), 100);
     try {

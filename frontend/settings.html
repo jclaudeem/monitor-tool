@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monitor Tool — Settings</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    .role-pill {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .role-pill.admin  { background: rgba(41,128,185,0.12); color: #2471a3; }
+    .role-pill.viewer { background: rgba(149,165,166,0.15); color: #7f8c8d; }
+  </style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <h1><i class="fa-solid fa-chart-network" style="margin-right:8px;color:#2980b9"></i>Monitor Tool</h1>
+    <span>Network &amp; Server Monitor</span>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-label">Main</div>
+    <a href="index.html" class="nav-link">
+      <i class="fa-solid fa-gauge"></i> Dashboard
+    </a>
+    <a href="clients.html" class="nav-link">
+      <i class="fa-solid fa-building"></i> Clients
+    </a>
+    <a href="devices.html" class="nav-link">
+      <i class="fa-solid fa-server"></i> Devices
+    </a>
+    <a href="agents.html" class="nav-link">
+      <i class="fa-solid fa-satellite-dish"></i> Agents
+    </a>
+    <div class="nav-label" style="margin-top:8px">Account</div>
+    <a href="settings.html" class="nav-link active">
+      <i class="fa-solid fa-gear"></i> Settings
+    </a>
+  </nav>
+</aside>
+
+<!-- Main -->
+<div class="main">
+  <header class="topbar">
+    <div class="topbar-left">
+      <h2>Settings</h2>
+    </div>
+    <div class="topbar-right">
+      <div class="user-menu" id="user-menu">
+        <button class="user-avatar" onclick="toggleUserMenu(event)">
+          <span id="user-initial">?</span>
+        </button>
+        <div class="user-dropdown" id="user-dropdown">
+          <div class="user-dropdown-header">
+            <div class="user-dropdown-name" id="user-dropdown-name">—</div>
+            <span class="role-badge" id="user-dropdown-role">—</span>
+          </div>
+          <div class="user-dropdown-divider"></div>
+          <a href="settings.html" class="user-dropdown-item">
+            <i class="fa-solid fa-gear"></i> Settings
+          </a>
+          <div class="user-dropdown-divider"></div>
+          <button class="user-dropdown-item danger" onclick="logout()">
+            <i class="fa-solid fa-right-from-bracket"></i> Log Out
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="content">
+    <div class="settings-tabs">
+      <button class="settings-tab active" id="tab-users" onclick="switchTab('users')">
+        <i class="fa-solid fa-users" style="margin-right:6px"></i>Users
+      </button>
+      <button class="settings-tab" id="tab-password" onclick="switchTab('password')">
+        <i class="fa-solid fa-key" style="margin-right:6px"></i>My Password
+      </button>
+    </div>
+
+    <!-- Users tab (admin only) -->
+    <div id="panel-users">
+      <div id="admin-only-notice" style="display:none" class="section-card">
+        <div style="padding:40px;text-align:center;color:var(--text-secondary)">
+          <i class="fa-solid fa-lock" style="font-size:32px;opacity:.4;display:block;margin-bottom:12px"></i>
+          <p>User management is restricted to admin accounts.</p>
+        </div>
+      </div>
+      <div id="users-panel" style="display:none">
+        <div class="section-card">
+          <div class="section-header">
+            <h3><i class="fa-solid fa-users" style="margin-right:8px;color:#2980b9"></i>Dashboard Users</h3>
+            <button class="btn btn-primary btn-sm" onclick="openAddUser()">
+              <i class="fa-solid fa-plus"></i> Add User
+            </button>
+          </div>
+          <div id="users-wrap">
+            <div class="empty-state"><div class="spinner"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Change password tab -->
+    <div id="panel-password" style="display:none">
+      <div class="section-card" style="max-width:460px">
+        <div class="section-header">
+          <h3><i class="fa-solid fa-key" style="margin-right:8px;color:#2980b9"></i>Change My Password</h3>
+        </div>
+        <div class="dialog-body" style="padding:24px">
+          <div class="form-group">
+            <label>New Password</label>
+            <input type="password" id="pw-new" placeholder="Min 8 characters">
+          </div>
+          <div class="form-group">
+            <label>Confirm New Password</label>
+            <input type="password" id="pw-confirm">
+          </div>
+          <div id="pw-error" style="color:var(--down);font-size:13px;margin-bottom:12px;display:none"></div>
+          <button class="btn btn-primary" onclick="changePassword()">
+            <i class="fa-solid fa-floppy-disk"></i> Save New Password
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add User Dialog -->
+<dialog id="add-user-dialog">
+  <div class="dialog-header">
+    <h3>Add User</h3>
+    <button class="btn-icon" onclick="document.getElementById('add-user-dialog').close()">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+  </div>
+  <div class="dialog-body">
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" id="new-username" autocapitalize="none" placeholder="e.g. jsmith">
+    </div>
+    <div class="form-group">
+      <label>Role</label>
+      <select id="new-role">
+        <option value="viewer">Viewer — read-only access</option>
+        <option value="admin">Admin — full access</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="new-password" placeholder="Min 8 characters">
+    </div>
+    <div class="form-group">
+      <label>Confirm Password</label>
+      <input type="password" id="new-password2">
+    </div>
+    <div id="add-user-error" style="color:var(--down);font-size:13px;margin-top:-8px;display:none"></div>
+  </div>
+  <div class="dialog-footer">
+    <button class="btn btn-ghost" onclick="document.getElementById('add-user-dialog').close()">Cancel</button>
+    <button class="btn btn-primary" onclick="submitAddUser()">
+      <i class="fa-solid fa-user-plus"></i> Create User
+    </button>
+  </div>
+</dialog>
+
+<!-- Edit User Dialog -->
+<dialog id="edit-user-dialog">
+  <div class="dialog-header">
+    <h3 id="edit-dialog-title">Edit User</h3>
+    <button class="btn-icon" onclick="document.getElementById('edit-user-dialog').close()">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+  </div>
+  <div class="dialog-body">
+    <input type="hidden" id="edit-user-id">
+    <div class="form-group">
+      <label>Role</label>
+      <select id="edit-role">
+        <option value="viewer">Viewer — read-only access</option>
+        <option value="admin">Admin — full access</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>New Password <span style="color:var(--text-secondary);font-weight:400">(leave blank to keep current)</span></label>
+      <input type="password" id="edit-password" placeholder="Min 8 characters">
+    </div>
+    <div id="edit-user-error" style="color:var(--down);font-size:13px;margin-top:-8px;display:none"></div>
+  </div>
+  <div class="dialog-footer">
+    <button class="btn btn-ghost" onclick="document.getElementById('edit-user-dialog').close()">Cancel</button>
+    <button class="btn btn-primary" onclick="submitEditUser()">
+      <i class="fa-solid fa-floppy-disk"></i> Save Changes
+    </button>
+  </div>
+</dialog>
+
+<!-- Delete User Confirm -->
+<dialog id="delete-user-dialog">
+  <div class="dialog-header">
+    <h3>Delete User</h3>
+    <button class="btn-icon" onclick="document.getElementById('delete-user-dialog').close()">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+  </div>
+  <div class="dialog-body">
+    <input type="hidden" id="delete-user-id">
+    <p>Delete user <strong id="delete-username-label"></strong>? This cannot be undone.</p>
+  </div>
+  <div class="dialog-footer">
+    <button class="btn btn-ghost" onclick="document.getElementById('delete-user-dialog').close()">Cancel</button>
+    <button class="btn btn-danger" onclick="submitDeleteUser()">
+      <i class="fa-solid fa-trash"></i> Delete
+    </button>
+  </div>
+</dialog>
+
+<script src="assets/app.js"></script>
+<script>
+  if (!requireAuth()) throw new Error('not authed');
+
+  const me = getAuthUser();
+  let activeTab = 'users';
+
+  function switchTab(tab) {
+    activeTab = tab;
+    document.getElementById('panel-users').style.display    = tab === 'users'    ? 'block' : 'none';
+    document.getElementById('panel-password').style.display = tab === 'password' ? 'block' : 'none';
+    document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById(`tab-${tab}`).classList.add('active');
+  }
+
+  // Show correct panel for users tab based on role
+  if (me?.role === 'admin') {
+    document.getElementById('users-panel').style.display = 'block';
+    loadUsers();
+  } else {
+    document.getElementById('admin-only-notice').style.display = 'block';
+  }
+
+  async function loadUsers() {
+    const wrap = document.getElementById('users-wrap');
+    try {
+      const users = await api.get('/api/users');
+      if (users.length === 0) {
+        wrap.innerHTML = `<div class="empty-state" style="padding:40px">
+          <i class="fa-solid fa-users"></i><p>No users yet.</p>
+        </div>`;
+        return;
+      }
+      const rows = users.map(u => `<tr>
+        <td><strong>${escHtml(u.username)}</strong></td>
+        <td><span class="role-pill ${u.role}">${u.role}</span></td>
+        <td style="color:var(--text-secondary);font-size:13px">${u.created_at ? new Date(u.created_at + (u.created_at.endsWith('Z') ? '' : 'Z')).toLocaleDateString() : '—'}</td>
+        <td style="color:var(--text-secondary);font-size:13px">${timeAgo(u.last_login)}</td>
+        <td style="text-align:right">
+          <button class="btn-icon" title="Edit" onclick="openEditUser(${u.id},'${escHtml(u.username)}','${u.role}')">
+            <i class="fa-solid fa-pen"></i>
+          </button>
+          ${u.id !== (me?.id || 0) ? `<button class="btn-icon danger" title="Delete" onclick="openDeleteUser(${u.id},'${escHtml(u.username)}')">
+            <i class="fa-solid fa-trash"></i>
+          </button>` : '<span style="width:34px;display:inline-block"></span>'}
+        </td>
+      </tr>`).join('');
+      wrap.innerHTML = `<table class="data-table">
+        <thead><tr><th>Username</th><th>Role</th><th>Created</th><th>Last Login</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    } catch (err) {
+      wrap.innerHTML = `<div class="empty-state" style="padding:30px"><p>Error loading users: ${escHtml(err.message)}</p></div>`;
+    }
+  }
+
+  function openAddUser() {
+    document.getElementById('new-username').value  = '';
+    document.getElementById('new-role').value      = 'viewer';
+    document.getElementById('new-password').value  = '';
+    document.getElementById('new-password2').value = '';
+    document.getElementById('add-user-error').style.display = 'none';
+    document.getElementById('add-user-dialog').showModal();
+  }
+
+  async function submitAddUser() {
+    const username = document.getElementById('new-username').value.trim();
+    const role     = document.getElementById('new-role').value;
+    const password = document.getElementById('new-password').value;
+    const pass2    = document.getElementById('new-password2').value;
+    const errEl    = document.getElementById('add-user-error');
+    errEl.style.display = 'none';
+    if (!username) { errEl.textContent = 'Username is required'; errEl.style.display = 'block'; return; }
+    if (!password || password.length < 8) { errEl.textContent = 'Password must be at least 8 characters'; errEl.style.display = 'block'; return; }
+    if (password !== pass2) { errEl.textContent = 'Passwords do not match'; errEl.style.display = 'block'; return; }
+    try {
+      await api.post('/api/users', { username, password, role });
+      document.getElementById('add-user-dialog').close();
+      showToast('User created');
+      loadUsers();
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.style.display = 'block';
+    }
+  }
+
+  function openEditUser(id, username, role) {
+    document.getElementById('edit-user-id').value = id;
+    document.getElementById('edit-dialog-title').textContent = `Edit: ${username}`;
+    document.getElementById('edit-role').value    = role;
+    document.getElementById('edit-password').value = '';
+    document.getElementById('edit-user-error').style.display = 'none';
+    document.getElementById('edit-user-dialog').showModal();
+  }
+
+  async function submitEditUser() {
+    const id       = parseInt(document.getElementById('edit-user-id').value);
+    const role     = document.getElementById('edit-role').value;
+    const password = document.getElementById('edit-password').value;
+    const errEl    = document.getElementById('edit-user-error');
+    errEl.style.display = 'none';
+    if (password && password.length < 8) { errEl.textContent = 'Password must be at least 8 characters'; errEl.style.display = 'block'; return; }
+    const body = { role };
+    if (password) body.password = password;
+    try {
+      await api.put(`/api/users/${id}`, body);
+      document.getElementById('edit-user-dialog').close();
+      showToast('User updated');
+      loadUsers();
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.style.display = 'block';
+    }
+  }
+
+  function openDeleteUser(id, username) {
+    document.getElementById('delete-user-id').value = id;
+    document.getElementById('delete-username-label').textContent = username;
+    document.getElementById('delete-user-dialog').showModal();
+  }
+
+  async function submitDeleteUser() {
+    const id = parseInt(document.getElementById('delete-user-id').value);
+    try {
+      await api.del(`/api/users/${id}`);
+      document.getElementById('delete-user-dialog').close();
+      showToast('User deleted');
+      loadUsers();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  }
+
+  async function changePassword() {
+    const pw  = document.getElementById('pw-new').value;
+    const pw2 = document.getElementById('pw-confirm').value;
+    const errEl = document.getElementById('pw-error');
+    errEl.style.display = 'none';
+    if (!pw || pw.length < 8) { errEl.textContent = 'Password must be at least 8 characters'; errEl.style.display = 'block'; return; }
+    if (pw !== pw2) { errEl.textContent = 'Passwords do not match'; errEl.style.display = 'block'; return; }
+    try {
+      await api.put(`/api/users/${me.id || 0}`, { password: pw });
+      document.getElementById('pw-new').value = '';
+      document.getElementById('pw-confirm').value = '';
+      showToast('Password updated — sign in again next time with your new password');
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.style.display = 'block';
+    }
+  }
+
+  // Viewers go straight to password tab since they can't manage users
+  if (me?.role !== 'admin') switchTab('password');
+</script>
+</body>
+</html>

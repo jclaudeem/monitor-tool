@@ -1,11 +1,13 @@
 const { app } = require('@azure/functions');
 const { getPool, sql } = require('../db');
+const { requireAuth, requireAdmin } = require('../auth');
 
 app.http('listDevices', {
   methods: ['GET'],
   authLevel: 'anonymous',
   route: 'devices',
   handler: async (req, ctx) => {
+    const authErr = requireAuth(req); if (authErr) return authErr;
     try {
       const pool = await getPool();
       const clientId = parseInt(new URL(req.url).searchParams.get('clientId') || '0') || null;
@@ -42,6 +44,7 @@ app.http('createDevice', {
   authLevel: 'anonymous',
   route: 'devices',
   handler: async (req, ctx) => {
+    const authErr = requireAdmin(req); if (authErr) return authErr;
     const { name, ip_address, type, location, agent_id, snmp_enabled, snmp_community, snmp_port } = await req.json();
     if (!name || !ip_address) {
       return { status: 400, jsonBody: { error: 'name and ip_address are required' } };
@@ -78,6 +81,7 @@ app.http('updateDevice', {
   authLevel: 'anonymous',
   route: 'devices/{id}',
   handler: async (req, ctx) => {
+    const authErr = requireAdmin(req); if (authErr) return authErr;
     const { name, ip_address, type, location, agent_id, snmp_enabled, snmp_community, snmp_port } = await req.json();
     if (!name || !ip_address) {
       return { status: 400, jsonBody: { error: 'name and ip_address are required' } };
@@ -120,6 +124,7 @@ app.http('deleteDevice', {
   authLevel: 'anonymous',
   route: 'devices/{id}',
   handler: async (req, ctx) => {
+    const authErr = requireAdmin(req); if (authErr) return authErr;
     try {
       const pool = await getPool();
       const result = await pool.request()

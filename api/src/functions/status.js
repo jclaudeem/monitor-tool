@@ -1,12 +1,13 @@
 const { app } = require('@azure/functions');
 const { getPool, sql } = require('../db');
-
+const { requireAuth } = require('../auth');
 
 app.http('getSummary', {
   methods: ['GET'],
   authLevel: 'anonymous',
   route: 'status/summary',
   handler: async (req, ctx) => {
+    const authErr = requireAuth(req); if (authErr) return authErr;
     try {
       const pool = await getPool();
       const clientId = parseInt(new URL(req.url).searchParams.get('clientId') || '0') || null;
@@ -52,6 +53,7 @@ app.http('getHistory', {
   authLevel: 'anonymous',
   route: 'status/history/{deviceId}',
   handler: async (req, ctx) => {
+    const authErr = requireAuth(req); if (authErr) return authErr;
     const limit = Math.min(parseInt(req.query.get('limit') || '100'), 1440);
     try {
       const pool = await getPool();

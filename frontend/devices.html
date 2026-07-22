@@ -70,16 +70,39 @@
     <a href="clients.html" class="nav-link"><i class="fa-solid fa-building"></i> Clients</a>
     <a href="devices.html" class="nav-link active"><i class="fa-solid fa-server"></i> Devices</a>
     <a href="agents.html" class="nav-link"><i class="fa-solid fa-satellite-dish"></i> Agents</a>
+    <div class="nav-label" style="margin-top:8px">Account</div>
+    <a href="settings.html" class="nav-link"><i class="fa-solid fa-gear"></i> Settings</a>
   </nav>
 </aside>
 
 <div class="main">
   <header class="topbar">
-    <h2>Devices</h2>
+    <div class="topbar-left">
+      <h2>Devices</h2>
+    </div>
     <div class="topbar-right">
-      <button class="btn btn-primary" onclick="openAddDialog()">
+      <button class="btn btn-primary" data-admin-only onclick="openAddDialog()">
         <i class="fa-solid fa-plus"></i> Add Device
       </button>
+      <div class="user-menu" id="user-menu">
+        <button class="user-avatar" onclick="toggleUserMenu(event)">
+          <span id="user-initial">?</span>
+        </button>
+        <div class="user-dropdown" id="user-dropdown">
+          <div class="user-dropdown-header">
+            <div class="user-dropdown-name" id="user-dropdown-name">—</div>
+            <span class="role-badge" id="user-dropdown-role">—</span>
+          </div>
+          <div class="user-dropdown-divider"></div>
+          <a href="settings.html" class="user-dropdown-item">
+            <i class="fa-solid fa-gear"></i> Settings
+          </a>
+          <div class="user-dropdown-divider"></div>
+          <button class="user-dropdown-item danger" onclick="logout()">
+            <i class="fa-solid fa-right-from-bracket"></i> Log Out
+          </button>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -226,6 +249,8 @@
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <script src="assets/app.js"></script>
 <script>
+  if (!requireAuth()) throw new Error('not authed');
+  const isAdmin = getAuthUser()?.role === 'admin';
   let devices = [];
   let agents  = [];
 
@@ -271,12 +296,12 @@
           ${d.snmp_enabled ? `<button class="btn-icon" title="View SNMP" onclick="openSnmpDialog(${d.id}, '${escHtml(d.name)}')">
             <i class="fa-solid fa-network-wired" style="color:#2980b9"></i>
           </button>` : ''}
-          <button class="btn-icon" title="Edit" onclick="openEditDialog(${d.id})">
+          ${isAdmin ? `<button class="btn-icon" title="Edit" onclick="openEditDialog(${d.id})">
             <i class="fa-solid fa-pen"></i>
           </button>
           <button class="btn-icon danger" title="Delete" onclick="openDeleteConfirm(${d.id})">
             <i class="fa-solid fa-trash"></i>
-          </button>
+          </button>` : ''}
         </td>
       </tr>`;
     }).join('');

@@ -29,18 +29,43 @@
     <a href="agents.html" class="nav-link">
       <i class="fa-solid fa-satellite-dish"></i> Agents
     </a>
+    <div class="nav-label" style="margin-top:8px">Account</div>
+    <a href="settings.html" class="nav-link">
+      <i class="fa-solid fa-gear"></i> Settings
+    </a>
   </nav>
 </aside>
 
 <!-- Main -->
 <div class="main">
   <header class="topbar">
-    <h2>Dashboard</h2>
-    <div class="topbar-right">
-      <span class="topbar-meta" id="last-updated">Loading…</span>
-      <button class="btn btn-ghost" onclick="loadDashboard()">
-        <i class="fa-solid fa-arrows-rotate"></i> Refresh
+    <div class="topbar-left">
+      <h2>Dashboard</h2>
+      <span class="topbar-meta" id="last-updated" style="font-size:12px;opacity:.7"></span>
+      <button class="btn btn-ghost btn-sm" onclick="loadDashboard()" title="Refresh">
+        <i class="fa-solid fa-arrows-rotate"></i>
       </button>
+    </div>
+    <div class="topbar-right">
+      <div class="user-menu" id="user-menu">
+        <button class="user-avatar" onclick="toggleUserMenu(event)">
+          <span id="user-initial">?</span>
+        </button>
+        <div class="user-dropdown" id="user-dropdown">
+          <div class="user-dropdown-header">
+            <div class="user-dropdown-name" id="user-dropdown-name">—</div>
+            <span class="role-badge" id="user-dropdown-role">—</span>
+          </div>
+          <div class="user-dropdown-divider"></div>
+          <a href="settings.html" class="user-dropdown-item">
+            <i class="fa-solid fa-gear"></i> Settings
+          </a>
+          <div class="user-dropdown-divider"></div>
+          <button class="user-dropdown-item danger" onclick="logout()">
+            <i class="fa-solid fa-right-from-bracket"></i> Log Out
+          </button>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -137,6 +162,7 @@
 </style>
 <script src="assets/app.js"></script>
 <script>
+  if (!requireAuth()) throw new Error('not authed');
   let activeClientId = null;
   let allClients = [];
 
@@ -302,11 +328,6 @@
       </thead>
       <tbody>${rows}</tbody>
     </table>`;
-  }
-
-  function escHtml(str) {
-    if (!str) return '';
-    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
   initTabs().then(() => loadDashboard());
