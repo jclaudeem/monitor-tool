@@ -27,17 +27,21 @@ app.http('listAgents', {
     const authErr = requireAuth(req); if (authErr) return authErr;
     try {
       const pool = await getPool();
-      const result = await pool.request().query(`
-        SELECT a.id, a.name, a.location, a.api_key, a.last_seen, a.created_at,
-               a.client_id, c.name AS client_name,
-               COUNT(d.id) AS device_count
-        FROM agents a
-        LEFT JOIN clients c ON c.id = a.client_id
-        LEFT JOIN devices d ON d.agent_id = a.id
-        GROUP BY a.id, a.name, a.location, a.api_key, a.last_seen, a.created_at,
-                 a.client_id, c.name
-        ORDER BY a.name
-      `);
+      const clientId = parseInt(new URL(req.url).searchParams.get('clientId') || '0') || null;
+      const result = await pool.request()
+        .input('clientId', sql.Int, clientId)
+        .query(`
+          SELECT a.id, a.name, a.location, a.api_key, a.last_seen, a.created_at,
+                 a.client_id, c.name AS client_name,
+                 COUNT(d.id) AS device_count
+          FROM agents a
+          LEFT JOIN clients c ON c.id = a.client_id
+          LEFT JOIN devices d ON d.agent_id = a.id
+          WHERE (@clientId IS NULL OR a.client_id = @clientId)
+          GROUP BY a.id, a.name, a.location, a.api_key, a.last_seen, a.created_at,
+                   a.client_id, c.name
+          ORDER BY a.name
+        `);
       return { jsonBody: result.recordset };
     } catch (err) {
       ctx.error('listAgents:', err.message);

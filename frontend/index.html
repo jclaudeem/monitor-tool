@@ -216,7 +216,7 @@
       const [summary, devices, agents] = await Promise.all([
         api.get('/api/status/summary' + qs),
         api.get('/api/devices' + qs),
-        api.get('/api/agents'),
+        api.get('/api/agents' + qs),
       ]);
       renderSummary(summary);
       renderDeviceTable(devices);
